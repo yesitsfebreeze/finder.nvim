@@ -287,6 +287,16 @@ function M.render_list()
   local render_items = function()
     local max_w = #tostring(n)
 
+    local picker_display
+    if state.mode == Mode.PROMPT and state.idx > 0 then
+      local pname = state.filters[state.idx]
+      local ppath = pname and opts.pickers[pname]
+      if ppath then
+        local pok, p = pcall(require, ppath)
+        if pok and p then picker_display = p.display end
+      end
+    end
+
     for i = 0, visible - 1 do
       local idx = top_idx + i
       local lnum = items_bottom - i
@@ -294,53 +304,66 @@ function M.render_list()
       local is_multi = state.multi_sel[idx]
       local marker = is_multi and "+" or " "
       local num = string.format("%s%" .. max_w .. "d ", marker, idx)
-      local hl = is_sel and "FinderHighlight" or "FinderText"
+      local num_hl = is_sel and "FinderHighlight" or is_multi and "FinderColor" or "FinderInactive"
 
       local item = state.items[idx]
-      local file, line_num, content = utils.parse_item(item)
 
-      if file and content then
-        local prefix_len = #num
-        local available = layout.win_width - prefix_len - 2
-        local filename = fn.fnamemodify(file, ":t")
-        local display_file
-        if is_sel then
-          display_file = file
-        else
-          local max_file_width = math.floor(available * layout.file_width_ratio)
-          if #filename > max_file_width then
-            display_file = filename
-          elseif #file <= max_file_width then
-            display_file = file
-          else
-            local remaining = max_file_width - #filename - 1
-            if remaining > 3 then
-              display_file = file:sub(1, remaining - 2) .. "…/" .. filename
-            else
-              display_file = filename
-            end
-          end
-        end
-        local file_display = " " .. display_file
-        local content_width = available - #file_display
-        local display_content = content
-        if #content > content_width then
-          display_content = content:sub(1, content_width - 1) .. "…"
-        end
-        local padding = string.rep(" ", math.max(0, available - #display_content - #file_display))
-
-        local content_virt = utils.highlight_matches(display_content, query, hl)
-
-        local virt = { { num, is_sel and "FinderHighlight" or is_multi and "FinderColor" or "FinderInactive" } }
-        for _, v in ipairs(content_virt) do table.insert(virt, v) end
-        table.insert(virt, { padding, hl })
-        table.insert(virt, { file_display, is_sel and "FinderHighlight" or "FinderInactive" })
+      if picker_display then
+        local virt = { { num, num_hl } }
+        local display_virt = picker_display(item, {
+          width = layout.win_width - #num,
+          is_sel = is_sel,
+          query = query,
+        })
+        for _, v in ipairs(display_virt) do table.insert(virt, v) end
         state.space:set_line(lnum, virt)
       else
-        local item_virt = utils.highlight_matches(item, query, hl)
-        local virt = { { num, is_sel and "FinderHighlight" or is_multi and "FinderColor" or "FinderInactive" } }
-        for _, v in ipairs(item_virt) do table.insert(virt, v) end
-        state.space:set_line(lnum, virt)
+        local hl = is_sel and "FinderHighlight" or "FinderText"
+        local file, line_num, content = utils.parse_item(item)
+
+        if file and content then
+          local prefix_len = #num
+          local available = layout.win_width - prefix_len - 2
+          local filename = fn.fnamemodify(file, ":t")
+          local display_file
+          if is_sel then
+            display_file = file
+          else
+            local max_file_width = math.floor(available * layout.file_width_ratio)
+            if #filename > max_file_width then
+              display_file = filename
+            elseif #file <= max_file_width then
+              display_file = file
+            else
+              local remaining = max_file_width - #filename - 1
+              if remaining > 3 then
+                display_file = file:sub(1, remaining - 2) .. "…/" .. filename
+              else
+                display_file = filename
+              end
+            end
+          end
+          local file_display = " " .. display_file
+          local content_width = available - #file_display
+          local display_content = content
+          if #content > content_width then
+            display_content = content:sub(1, content_width - 1) .. "…"
+          end
+          local padding = string.rep(" ", math.max(0, available - #display_content - #file_display))
+
+          local content_virt = utils.highlight_matches(display_content, query, hl)
+
+          local virt = { { num, num_hl } }
+          for _, v in ipairs(content_virt) do table.insert(virt, v) end
+          table.insert(virt, { padding, hl })
+          table.insert(virt, { file_display, is_sel and "FinderHighlight" or "FinderInactive" })
+          state.space:set_line(lnum, virt)
+        else
+          local item_virt = utils.highlight_matches(item, query, hl)
+          local virt = { { num, num_hl } }
+          for _, v in ipairs(item_virt) do table.insert(virt, v) end
+          state.space:set_line(lnum, virt)
+        end
       end
     end
   end

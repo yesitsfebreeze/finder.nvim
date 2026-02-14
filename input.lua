@@ -1,7 +1,6 @@
 local api = vim.api
 local fn = vim.fn
 local cmd = vim.cmd
-local keymap = vim.keymap
 local bo = vim.bo
 local wo = vim.wo
 
@@ -12,6 +11,7 @@ local create_space = require("finder.space")
 local evaluate_mod = require("finder.evaluate")
 local render = require("finder.render")
 local utils = require("finder.utils")
+local keymap = require("finder.keymap")
 
 local function create_input()
   local opts = state.opts or state.defaults
@@ -21,7 +21,7 @@ local function create_input()
 
   local function bind(k, fn_ref)
     local bindings = type(k) == "table" and k or { k }
-    for _, b in ipairs(bindings) do keymap.set("i", b, fn_ref, { buffer = st.buf }) end
+    for _, b in ipairs(bindings) do keymap.bind("i", b, fn_ref, { buffer = st.buf }) end
   end
 
   local function get()
@@ -108,7 +108,7 @@ local function create_input()
   local active_action_keys = {}
   local function register_picker_actions()
     for _, key in ipairs(active_action_keys) do
-      pcall(keymap.del, "i", key, { buffer = st.buf })
+      keymap.unbind("i", key, { buffer = st.buf })
     end
     active_action_keys = {}
 
@@ -122,7 +122,7 @@ local function create_input()
 
     for key, action_fn in pairs(picker.actions) do
       table.insert(active_action_keys, key)
-      keymap.set("i", key, function()
+      keymap.bind("i", key, function()
         local target_idx = state.sel or (#state.items > 0 and 1 or nil)
         if not target_idx or not state.items[target_idx] then return end
         state.close()
@@ -221,12 +221,6 @@ local function create_input()
   st.buf = api.nvim_create_buf(false, true)
   bo[st.buf].bufhidden, bo[st.buf].buftype = "wipe", "nofile"
 
-  -- Disable nvim-cmp for this buffer so it doesn't steal <Tab>
-  local cmp_ok, cmp = pcall(require, "cmp")
-  if cmp_ok then
-    cmp.setup.buffer({ enabled = false })
-  end
-
   local init = (state.mode == Mode.PROMPT and state.idx > 0) and (state.prompts[state.idx] or "") or ""
   api.nvim_buf_set_lines(st.buf, 0, -1, false, { init })
   update_virt()
@@ -288,10 +282,8 @@ local function create_input()
   local tab_cycling = false
 
   local function push_forward()
-    print("[TAB] mode=" .. tostring(state.mode) .. " PICKER=" .. tostring(Mode.PICKER) .. " PROMPT=" .. tostring(Mode.PROMPT) .. " idx=" .. tostring(state.idx) .. " #items=" .. tostring(#state.items) .. " current_type=" .. tostring(state.current_type))
     if state.mode == Mode.PICKER then
       local all = evaluate_mod.get_pickers()
-      print("[TAB] PICKER branch, #pickers=" .. tostring(#all) .. " pickers=" .. table.concat(all, ","))
       if #all == 0 then return end
       local input = get()
       local current_idx = 0
@@ -391,25 +383,25 @@ local function create_input()
     end
   end
 
-  keymap.set("i", "<CR>", open_item, { buffer = st.buf })
-  keymap.set("i", "<Tab>", push_forward, { buffer = st.buf })
-  keymap.set("i", "<S-Tab>", step_back, { buffer = st.buf })
+  keymap.bind("i", "<CR>", open_item, { buffer = st.buf })
+  keymap.bind("i", "<Tab>", push_forward, { buffer = st.buf })
+  keymap.bind("i", "<S-Tab>", step_back, { buffer = st.buf })
 
-  keymap.set("i", "<Esc>", function()
+  keymap.bind("i", "<Esc>", function()
     if state.sel or next(state.multi_sel) then
       state.sel = nil; state.multi_sel = {}; render.render_list()
     else state.close() end
   end, { buffer = st.buf })
 
   for key, del in pairs({ ["<BS>"] = true, ["<Left>"] = false }) do
-    keymap.set("i", key, function()
+    keymap.bind("i", key, function()
       if not nav_back(del) then
         api.nvim_feedkeys(api.nvim_replace_termcodes(key, true, false, true), "n", false)
       end
     end, { buffer = st.buf })
   end
 
-  keymap.set("i", "<Right>", function()
+  keymap.bind("i", "<Right>", function()
     local line = get()
     if fn.col(".") <= #line then
       api.nvim_feedkeys(api.nvim_replace_termcodes("<Right>", true, false, true), "n", false)
@@ -530,9 +522,11 @@ local function create_input()
   })
 
   cmd("startinsert!")
+  vim.schedule(keymap.rebind_all)
 
   return {
     close = function()
+      keymap.unbind_all()
       api.nvim_del_augroup_by_name("FinderResize")
       if st.win and api.nvim_win_is_valid(st.win) then api.nvim_win_close(st.win, true) end
       st.win, st.buf = nil, nil

@@ -24,6 +24,9 @@ function M.apply()
   api.nvim_set_hl(0, "FinderText",      { fg = hl_attr("Normal", "fg")   or defaults.text })
   api.nvim_set_hl(0, "FinderSeparator", { fg = color, bg = defaults.sep_bg })
   api.nvim_set_hl(0, "FinderCount",     { fg = color, bold = true })
+  api.nvim_set_hl(0, "FinderHash",      { fg = hl_attr("Number", "fg") or color })
+  api.nvim_set_hl(0, "FinderDate",      { fg = hl_attr("Comment", "fg") or defaults.inactive })
+  api.nvim_set_hl(0, "FinderAuthor",    { fg = hl_attr("String", "fg") or defaults.text })
 
   local preview_bg = hl_attr("NormalFloat", "bg") or hl_attr("Normal", "bg") or defaults.preview_bg
   api.nvim_set_hl(0, "FinderPreviewBG", { fg = color, bg = preview_bg })

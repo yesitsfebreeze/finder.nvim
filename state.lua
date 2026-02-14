@@ -35,6 +35,7 @@ local defaults = {
     Files = "finder.builtin.files",
     Grep = "finder.builtin.grep",
     Commits = "finder.builtin.commits",
+    Changes = "finder.builtin.commit_grep",
     File = "finder.builtin.file",
     Sessions = "finder.builtin.sessions",
     Dirs = "finder.builtin.dirs",

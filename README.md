@@ -2,9 +2,9 @@
 
 A composable fuzzy finder for Neovim. Pickers chain together — pipe Files into Grep, Grep into Commits, etc. No dependencies beyond Neovim 0.10+.
 
-![Picker select](screenshots/1.png)
-![Filtering results](screenshots/2.png)
-![Chaining pickers](screenshots/3.png)
+![Demo 1](gifs/1.gif)
+![Demo 2](gifs/2.gif)
+![Demo 3](gifs/3.gif)
 
 ## Installation
 
@@ -88,12 +88,12 @@ require("finder").setup({
   sep = " > ",
   list_height = 10,
   pickers = {
-    Files = "finder.builtin.files",
-    Grep = "finder.builtin.grep",
-    Commits = "finder.builtin.commits",
-    File = "finder.builtin.file",
-    Sessions = "finder.builtin.sessions",
-    Dirs = "finder.builtin.dirs",
+    Files = "finder.finders.files",
+    Grep = "finder.finders.grep",
+    Commits = "finder.finders.commits",
+    File = "finder.finders.file",
+    Sessions = "finder.finders.sessions",
+    Dirs = "finder.finders.dirs",
   },
 })
 ```
@@ -119,8 +119,7 @@ Finder has two modes: **picker select** and **prompt**.
 | `<Esc>` | Clear selection, or close finder |
 | `<BS>` | At column 1: navigate back through the filter chain |
 | `<Up>` / `<C-k>` | Select previous item |
-| `+` | Add current item to multiselect |
-| `-` | Remove current item from multiselect |
+| `+` | Toggle multiselect on/off for current item |
 | `<C-i>` | Enter interact mode on selected item (rename/delete) |
 | `<C-g>` | Toggle git-files-only mode |
 | `<C-s>` | Toggle case-sensitive search |
@@ -206,9 +205,9 @@ return M
 require("finder").setup({
   pickers = {
     -- keep the defaults
-    Files = "finder.builtin.files",
-    Grep = "finder.builtin.grep",
-    Commits = "finder.builtin.commits",
+    Files = "finder.finders.files",
+    Grep = "finder.finders.grep",
+    Commits = "finder.finders.commits",
     -- add yours
     Buffers = "finder.pickers.buffers",
   },

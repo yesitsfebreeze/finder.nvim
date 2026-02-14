@@ -32,6 +32,7 @@ function M.open_file_at_line(file, line_num, open_cmd, query)
       local line = vim.api.nvim_get_current_line()
       local s, e = M.find_match(line, query)
       if s and e and e > s then
+        local state = require("finder.state")
         local om = (state.opts or state.defaults).open_mode or {}
         local pos = om.pos or "begin"
         local mmode = om.mode or "normal"

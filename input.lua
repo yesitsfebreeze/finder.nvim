@@ -77,13 +77,22 @@ local function create_input()
     end
 
     if state.mode == Mode.PROMPT and state.idx > 0 then
-      local remaining = math.max(0, 2 - #input)
-      if remaining > 0 then
-        local line = api.nvim_buf_get_lines(st.buf, 0, 1, false)[1] or ""
-        api.nvim_buf_set_extmark(st.buf, NS, 0, #line, {
-          virt_text = { { string.rep("?", remaining), "FinderInactive" } },
-          virt_text_pos = "inline", right_gravity = true,
-        })
+      local cur_filter = state.filters[state.idx]
+      local cur_path = cur_filter and opts.pickers[cur_filter]
+      local cur_initial = false
+      if cur_path then
+        local pok, p = pcall(require, cur_path)
+        if pok and p then cur_initial = p.initial end
+      end
+      if not cur_initial then
+        local remaining = math.max(0, 2 - #input)
+        if remaining > 0 then
+          local line = api.nvim_buf_get_lines(st.buf, 0, 1, false)[1] or ""
+          api.nvim_buf_set_extmark(st.buf, NS, 0, #line, {
+            virt_text = { { string.rep("?", remaining), "FinderInactive" } },
+            virt_text_pos = "inline", right_gravity = true,
+          })
+        end
       end
     end
 
@@ -417,18 +426,16 @@ local function create_input()
     render.update_bar(get()); update_virt()
   end)
 
-  bind(keys.multi_add, function()
+  bind(keys.multi_toggle, function()
     local idx = state.sel or (#state.items > 0 and 1 or nil)
     if not idx then return end
-    state.multi_sel[idx] = true
-    sel_up()
-  end)
-
-  bind(keys.multi_remove, function()
-    local idx = state.sel or (#state.items > 0 and 1 or nil)
-    if not idx then return end
-    state.multi_sel[idx] = nil
-    sel_down()
+    if state.multi_sel[idx] then
+      state.multi_sel[idx] = nil
+      sel_down()
+    else
+      state.multi_sel[idx] = true
+      sel_up()
+    end
   end)
 
   local picker_select_timer = nil
@@ -490,15 +497,29 @@ local function create_input()
           end
         end
       else
-        cancel_debounce()
-        debounce_timer = vim.uv.new_timer()
-        debounce_timer:start(state.debounce, 0, vim.schedule_wrap(function()
+        local cur_filter = state.filters[state.idx]
+        local cur_path = cur_filter and opts.pickers[cur_filter]
+        local is_initial = false
+        if cur_path then
+          local pok, p = pcall(require, cur_path)
+          if pok and p then is_initial = p.initial end
+        end
+        if is_initial and input == "" then
           cancel_debounce()
-          if not st.buf or not api.nvim_buf_is_valid(st.buf) then return end
-          state.prompts[state.idx] = get()
+          state.prompts[state.idx] = ""
           evaluate_mod.evaluate()
-          render.render_list(); render.update_bar(get()); update_virt()
-        end))
+          render.render_list(); render.update_bar(""); update_virt()
+        else
+          cancel_debounce()
+          debounce_timer = vim.uv.new_timer()
+          debounce_timer:start(state.debounce, 0, vim.schedule_wrap(function()
+            cancel_debounce()
+            if not st.buf or not api.nvim_buf_is_valid(st.buf) then return end
+            state.prompts[state.idx] = get()
+            evaluate_mod.evaluate()
+            render.render_list(); render.update_bar(get()); update_virt()
+          end))
+        end
       end
     end
   })

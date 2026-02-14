@@ -65,7 +65,7 @@ function M.evaluate()
       return
     end
 
-    if #query < 2 then
+    if #query < 2 and not picker.initial then
       state.items = {}
       state.current_type = picker.produces or DataType.FileList
       state.sel = nil

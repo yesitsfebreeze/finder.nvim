@@ -264,6 +264,17 @@ function M.render_list()
       preview_state.match_line = preview_info.match_line
     end
 
+    if state.mode == Mode.PROMPT and state.idx > 0 and preview_state.buf and api.nvim_buf_is_valid(preview_state.buf) then
+      local pname = state.filters[state.idx]
+      local ppath = pname and opts.pickers[pname]
+      if ppath then
+        local pok, p = pcall(require, ppath)
+        if pok and p and p.decorate_preview then
+          p.decorate_preview(preview_state.buf, preview_info.file, preview_info.start_line, preview_info.end_line)
+        end
+      end
+    end
+
   end
 
   local render_items = function()

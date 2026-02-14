@@ -6,11 +6,7 @@ local utils = require("finder.utils")
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.Dir, DataType.DirList, DataType.Commits }
 M.produces = DataType.FileList
-M.actions = {
-  ["<C-v>"] = function(item) utils.open_file_at_line(item, nil, "vsplit") end,
-  ["<C-x>"] = function(item) utils.open_file_at_line(item, nil, "split") end,
-  ["<C-t>"] = function(item) utils.open_file_at_line(item, nil, "tabedit") end,
-}
+M.actions = utils.file_open_actions
 
 local file_cache, cache_key_prev = nil, nil
 

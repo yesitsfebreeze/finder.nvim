@@ -6,11 +6,7 @@ local utils = require("finder.utils")
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.File, DataType.Dir, DataType.DirList, DataType.Commits }
 M.produces = DataType.GrepList
-M.actions = {
-  ["<C-v>"] = function(item) local u = require("finder.utils"); local s = require("finder.state"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "vsplit", s.prompts[s.idx]) end,
-  ["<C-x>"] = function(item) local u = require("finder.utils"); local s = require("finder.state"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "split", s.prompts[s.idx]) end,
-  ["<C-t>"] = function(item) local u = require("finder.utils"); local s = require("finder.state"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "tabedit", s.prompts[s.idx]) end,
-}
+M.actions = require("finder.utils").grep_query_open_actions
 
 local pending = { job = nil, cmd = nil, cache = {} }
 

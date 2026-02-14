@@ -8,6 +8,7 @@ local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.Dir, DataType.DirList, DataType.Commits }
 M.produces = DataType.Commits
 M.display = display.commit
+M.initial = true
 
 function M.filter(query, items)
   if fn.executable("git") ~= 1 then

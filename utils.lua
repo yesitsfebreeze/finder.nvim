@@ -206,6 +206,24 @@ function M.extract_dirs(items)
   return out
 end
 
+M.file_open_actions = {
+  ["<C-v>"] = function(item) M.open_file_at_line(item, nil, "vsplit") end,
+  ["<C-x>"] = function(item) M.open_file_at_line(item, nil, "split") end,
+  ["<C-t>"] = function(item) M.open_file_at_line(item, nil, "tabedit") end,
+}
+
+M.grep_open_actions = {
+  ["<C-v>"] = function(item) local f, l = M.parse_item(item); M.open_file_at_line(f, l, "vsplit") end,
+  ["<C-x>"] = function(item) local f, l = M.parse_item(item); M.open_file_at_line(f, l, "split") end,
+  ["<C-t>"] = function(item) local f, l = M.parse_item(item); M.open_file_at_line(f, l, "tabedit") end,
+}
+
+M.grep_query_open_actions = {
+  ["<C-v>"] = function(item) local s = require("finder.state"); local f, l = M.parse_item(item); M.open_file_at_line(f, l, "vsplit", s.prompts[s.idx]) end,
+  ["<C-x>"] = function(item) local s = require("finder.state"); local f, l = M.parse_item(item); M.open_file_at_line(f, l, "split", s.prompts[s.idx]) end,
+  ["<C-t>"] = function(item) local s = require("finder.state"); local f, l = M.parse_item(item); M.open_file_at_line(f, l, "tabedit", s.prompts[s.idx]) end,
+}
+
 function M.commits_to_grep(items)
   local hashes = {}
   for _, item in ipairs(items) do

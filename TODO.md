@@ -68,9 +68,16 @@
 - Extend `utils.open_file_at_line` to accept optional `open_cmd` parameter (default `"edit"`)
 - In `input.lua`, register picker action keymaps after standard keymaps; re-register when `state.idx` changes
 - Default actions for file-producing pickers: `<C-v>` (vsplit), `<C-x>` (split), `<C-t>` (tabedit)
-- No conflict: toggles stay on `<C-1>`..`<C-4>`
+- No conflict: toggles are configurable via `opts.keys`
 
-### Step 9 — Frecency/MRU sorting
+### Step 9 — Configurable keybindings ✅
+- Add `keys` table to `defaults` in `state.lua` with all non-structural keybindings
+- Each key accepts a string or list of strings (multiple bindings per action)
+- Helper `bind()` in `input.lua` normalizes string/table and sets all bindings
+- Fixed keys: `<CR>`, `<Tab>`, `<S-Tab>`, `<Esc>`, `<BS>`, `<Left>`, `<Right>`
+- Configurable: `sel_down`, `sel_up`, `preview_down`, `preview_up`, toggles, multi-select
+
+### Step 10 — Frecency/MRU sorting
 - Frecency file at `stdpath("data") .. "/finder_frecency.json"`
 - Track `{ [filepath] = { count = N, last_access = timestamp } }`
 - In `utils.open_file_at_line`, bump count + update timestamp after opening
@@ -92,4 +99,4 @@
 - **Async:** `vim.fn.jobstart` over `vim.uv.spawn` — simpler, handles stdout line-buffering natively
 - **Frecency storage:** JSON over SQLite — no deps, sufficient for ~500 entries
 - **Refactoring:** Local closures inside `render_list()` per project rule against single-use functions
-- **Toggle keys:** Keep `<C-1>`..`<C-4>`, no conflict with new `<C-v>`/`<C-x>`/`<C-t>` actions
+- **Keybindings:** All non-structural keys configurable via `opts.keys`; structural keys (`<CR>`, `<Tab>`, `<Esc>`, etc.) stay fixed

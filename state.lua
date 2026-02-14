@@ -39,6 +39,18 @@ local defaults = {
     Sessions = "finder.builtin.sessions",
     Dirs = "finder.builtin.dirs",
   },
+  keys = {
+    sel_down = { "<Down>", "<C-j>" },
+    sel_up = { "<Up>", "<C-k>" },
+    preview_down = "<C-s>",
+    preview_up = "<C-w>",
+    toggle_case = "<C-1>",
+    toggle_word = "<C-2>",
+    toggle_regex = "<C-3>",
+    toggle_gitfiles = "<C-4>",
+    multi_add = "+",
+    multi_remove = "-",
+  },
 }
 
 local M = {

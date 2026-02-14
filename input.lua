@@ -15,8 +15,14 @@ local utils = require("finder.utils")
 
 local function create_input()
   local opts = state.opts or state.defaults
+  local keys = opts.keys
   local NS = api.nvim_create_namespace("finder_input")
   local st = { buf = nil, win = nil }
+
+  local function bind(k, fn_ref)
+    local bindings = type(k) == "table" and k or { k }
+    for _, b in ipairs(bindings) do keymap.set("i", b, fn_ref, { buffer = st.buf }) end
+  end
 
   local function get()
     if not st.buf or not api.nvim_buf_is_valid(st.buf) then return "" end
@@ -360,51 +366,51 @@ local function create_input()
     end
   end, { buffer = st.buf })
 
-  for _, k in ipairs({ "<C-j>", "<Down>" }) do keymap.set("i", k, sel_down, { buffer = st.buf }) end
-  for _, k in ipairs({ "<C-k>", "<Up>" }) do keymap.set("i", k, sel_up, { buffer = st.buf }) end
+  bind(keys.sel_down, sel_down)
+  bind(keys.sel_up, sel_up)
 
-  keymap.set("i", "<C-s>", function()
+  bind(keys.preview_down, function()
     state.preview_scroll = (state.preview_scroll or 0) + 3
     render.render_list()
-  end, { buffer = st.buf })
+  end)
 
-  keymap.set("i", "<C-w>", function()
+  bind(keys.preview_up, function()
     state.preview_scroll = math.max(0, (state.preview_scroll or 0) - 3)
     render.render_list()
-  end, { buffer = st.buf })
+  end)
 
   local function make_toggle(key, name)
-    keymap.set("i", key, function()
+    bind(key, function()
       state.toggles[name] = not state.toggles[name]
       state.result_cache = {}
       evaluate_mod.evaluate(); render.render_list()
       render.update_bar(get()); update_virt()
-    end, { buffer = st.buf })
+    end)
   end
-  make_toggle("<C-1>", "case")
-  make_toggle("<C-2>", "word")
-  make_toggle("<C-3>", "regex")
-  keymap.set("i", "<C-4>", function()
+  make_toggle(keys.toggle_case, "case")
+  make_toggle(keys.toggle_word, "word")
+  make_toggle(keys.toggle_regex, "regex")
+  bind(keys.toggle_gitfiles, function()
     if not state.in_git then return end
     state.toggles.gitfiles = not state.toggles.gitfiles
     state.result_cache = {}
     evaluate_mod.evaluate(); render.render_list()
     render.update_bar(get()); update_virt()
-  end, { buffer = st.buf })
+  end)
 
-  keymap.set("i", "+", function()
+  bind(keys.multi_add, function()
     local idx = state.sel or (#state.items > 0 and 1 or nil)
     if not idx then return end
     state.multi_sel[idx] = true
     sel_up()
-  end, { buffer = st.buf })
+  end)
 
-  keymap.set("i", "-", function()
+  bind(keys.multi_remove, function()
     local idx = state.sel or (#state.items > 0 and 1 or nil)
     if not idx then return end
     state.multi_sel[idx] = nil
     sel_up()
-  end, { buffer = st.buf })
+  end)
 
   api.nvim_create_autocmd("TextChangedI", {
     buffer = st.buf,

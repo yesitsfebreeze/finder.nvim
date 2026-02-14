@@ -2,31 +2,7 @@ local Mode = { PICKER = 1, PROMPT = 2, INTERACT = 3 }
 
 local DEBOUNCE_DELAY = 25
 
-local DataType = {
-  None = 0,
-  FileList = 1,
-  GrepList = 2,
-  Commits = 3,
-  File = 4,
-  Dir = 5,
-  DirList = 6,
-}
-
-local function register_type(name, id)
-  assert(type(name) == "string", "register_type: name must be a string")
-  assert(type(id) == "number", "register_type: id must be a number")
-  if DataType[name] then
-    assert(DataType[name] == id, string.format("register_type: '%s' already registered with id %d", name, DataType[name]))
-    return id
-  end
-  for k, v in pairs(DataType) do
-    if v == id then
-      error(string.format("register_type: id %d already used by '%s'", id, k))
-    end
-  end
-  DataType[name] = id
-  return id
-end
+local DataType = require("finder.types")
 
 local defaults = {
   sep = " > ",
@@ -45,6 +21,7 @@ local defaults = {
     ["/down"] = "finder.builtin.search_down",
     ["?up"] = "finder.builtin.search_up",
   },
+  open_mode = { pos = "begin", mode = "normal" },
   keys = {
     sel_down = { "<Down>", "<C-j>" },
     sel_up = { "<Up>", "<C-k>" },
@@ -107,6 +84,6 @@ M.debounce = DEBOUNCE_DELAY
 M.Mode = Mode
 M.DataType = DataType
 M.defaults = defaults
-M.register_type = register_type
+M.register_type = DataType.register
 
 return M

@@ -3,6 +3,10 @@ local cmd = vim.cmd
 
 local M = {}
 
+function M.is_git_repo()
+  return fn.executable("git") == 1 and fn.systemlist("git rev-parse --is-inside-work-tree 2>/dev/null")[1] == "true"
+end
+
 function M.pad(str, w)
   return #str >= w and str or str .. string.rep(" ", w - #str)
 end
@@ -11,6 +15,10 @@ function M.parse_item(item)
   local file, line_num, content = item:match("^([^:]+):(%d+):(.*)$")
   if not file then file = item end
   return file, tonumber(line_num), content
+end
+
+function M.is_git_repo()
+  return fn.executable("git") == 1 and fn.systemlist("git rev-parse --is-inside-work-tree 2>/dev/null")[1] == "true"
 end
 
 function M.open_file_at_line(file, line_num, open_cmd, query)
@@ -24,9 +32,25 @@ function M.open_file_at_line(file, line_num, open_cmd, query)
       local line = vim.api.nvim_get_current_line()
       local s, e = M.find_match(line, query)
       if s and e and e > s then
-        vim.api.nvim_win_set_cursor(0, { line_num, s })
-        cmd("normal! v")
-        vim.api.nvim_win_set_cursor(0, { line_num, e - 1 })
+        local om = (state.opts or state.defaults).open_mode or {}
+        local pos = om.pos or "begin"
+        local mmode = om.mode or "normal"
+        if mmode == "visual" then
+          if pos == "end" then
+            vim.api.nvim_win_set_cursor(0, { line_num, s })
+            cmd("normal! v")
+            vim.api.nvim_win_set_cursor(0, { line_num, e - 1 })
+          else
+            vim.api.nvim_win_set_cursor(0, { line_num, e - 1 })
+            cmd("normal! v")
+            vim.api.nvim_win_set_cursor(0, { line_num, s })
+          end
+        elseif mmode == "insert" then
+          vim.api.nvim_win_set_cursor(0, { line_num, pos == "end" and e or s })
+          cmd("startinsert")
+        else
+          vim.api.nvim_win_set_cursor(0, { line_num, pos == "end" and (e - 1) or s })
+        end
       end
     end
     local state = require("finder.state")

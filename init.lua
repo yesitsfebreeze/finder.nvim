@@ -7,6 +7,7 @@ local create_space = require("space")
 local evaluate_mod = require("finder.evaluate")
 local render = require("finder.render")
 local create_input = require("finder.input")
+local utils = require("finder.utils")
 
 local M = {}
 
@@ -70,7 +71,7 @@ function M.enter()
   state.sel = nil
   state.multi_sel = {}
   local fn = vim.fn
-  state.in_git = fn.executable("git") == 1 and fn.systemlist("git rev-parse --is-inside-work-tree 2>/dev/null")[1] == "true"
+  state.in_git = utils.is_git_repo()
   state.toggles.gitfiles = state.in_git
   render.render_list()
   render.update_bar(state.mode == Mode.PROMPT and (state.prompts[state.idx] or "") or "")

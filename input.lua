@@ -99,6 +99,32 @@ local function create_input()
     })
   end
 
+  local active_action_keys = {}
+  local function register_picker_actions()
+    for _, key in ipairs(active_action_keys) do
+      pcall(keymap.del, "i", key, { buffer = st.buf })
+    end
+    active_action_keys = {}
+
+    if state.mode ~= Mode.PROMPT or state.idx < 1 then return end
+    local cur_filter = state.filters[state.idx]
+    if not cur_filter then return end
+    local picker_path = opts.pickers[cur_filter]
+    if not picker_path then return end
+    local pok, picker = pcall(require, picker_path)
+    if not pok or not picker or not picker.actions then return end
+
+    for key, action_fn in pairs(picker.actions) do
+      table.insert(active_action_keys, key)
+      keymap.set("i", key, function()
+        local target_idx = state.sel or (#state.items > 0 and 1 or nil)
+        if not target_idx or not state.items[target_idx] then return end
+        state.close()
+        action_fn(state.items[target_idx])
+      end, { buffer = st.buf })
+    end
+  end
+
   local function nav_back(del)
     if fn.col(".") > 1 then return false end
 
@@ -107,6 +133,7 @@ local function create_input()
         state.mode, state.idx = Mode.PROMPT, #state.filters
         local txt = state.prompts[state.idx] or ""
         set(txt, true); render.update_bar(txt); update_virt()
+        register_picker_actions()
       end
       return true
     end
@@ -121,6 +148,7 @@ local function create_input()
       state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
       clear(); render.update_bar("")
       render.render_list(); update_virt()
+      register_picker_actions()
       return true
     end
 
@@ -129,18 +157,21 @@ local function create_input()
       state.idx = state.idx - 1
       local txt = state.prompts[state.idx] or ""
       set(txt, true); evaluate_mod.evaluate(); render.render_list(); render.update_bar(txt); update_virt()
+      register_picker_actions()
     end
     return true
   end
 
   local function sel_up()
     state.sel = state.sel and (state.sel < #state.items and state.sel + 1 or state.sel) or 1
+    state.preview_scroll = 0
     render.render_list()
   end
 
   local function sel_down()
     if state.sel == 1 then state.sel = nil
     elseif state.sel then state.sel = state.sel - 1 end
+    state.preview_scroll = 0
     render.render_list()
   end
 
@@ -156,6 +187,8 @@ local function create_input()
     row = state.space.win_height(), col = 0, style = "minimal", focusable = true,
   })
   wo[st.win].winhighlight = "Normal:Normal,NormalFloat:Normal"
+
+  register_picker_actions()
 
   local function open_item()
     if state.mode == Mode.PICKER then
@@ -246,9 +279,7 @@ local function create_input()
     state.idx = state.idx + 1
     state.filter_inputs[state.idx] = { items = forward_items, type = DataType.FileList }
     table.insert(state.filters, "Grep")
-    table.insert(state.prompts, fn.fnamemodify(file, ":t"))
-
-    evaluate_mod.evaluate()
+    table.insert(state.prompts, "")
 
     local prev_picker_path = opts.pickers[state.filters[#state.filters - 1]]
     local pok, picker = pcall(require, prev_picker_path)
@@ -256,13 +287,14 @@ local function create_input()
       state.pending_open = { fn = picker.on_open, item = file }
     end
 
-    state.mode = Mode.PICKER
-    state.picks = evaluate_mod.get_pickers()
+    state.mode = Mode.PROMPT
     state.sel = nil
+    evaluate_mod.evaluate()
     render.render_list()
     render.update_bar("")
     update_virt()
     clear()
+    register_picker_actions()
   end
 
   local function step_back()
@@ -277,6 +309,7 @@ local function create_input()
         state.mode = Mode.PROMPT
         local txt = state.prompts[state.idx] or ""
         set(txt, true); render.update_bar(txt)
+        register_picker_actions()
       else
         state.picks = evaluate_mod.get_pickers()
         render.update_bar("")
@@ -330,9 +363,20 @@ local function create_input()
   for _, k in ipairs({ "<C-j>", "<Down>" }) do keymap.set("i", k, sel_down, { buffer = st.buf }) end
   for _, k in ipairs({ "<C-k>", "<Up>" }) do keymap.set("i", k, sel_up, { buffer = st.buf }) end
 
+  keymap.set("i", "<C-s>", function()
+    state.preview_scroll = (state.preview_scroll or 0) + 3
+    render.render_list()
+  end, { buffer = st.buf })
+
+  keymap.set("i", "<C-w>", function()
+    state.preview_scroll = math.max(0, (state.preview_scroll or 0) - 3)
+    render.render_list()
+  end, { buffer = st.buf })
+
   local function make_toggle(key, name)
     keymap.set("i", key, function()
       state.toggles[name] = not state.toggles[name]
+      state.result_cache = {}
       evaluate_mod.evaluate(); render.render_list()
       render.update_bar(get()); update_virt()
     end, { buffer = st.buf })
@@ -343,6 +387,7 @@ local function create_input()
   keymap.set("i", "<C-4>", function()
     if not state.in_git then return end
     state.toggles.gitfiles = not state.toggles.gitfiles
+    state.result_cache = {}
     evaluate_mod.evaluate(); render.render_list()
     render.update_bar(get()); update_virt()
   end, { buffer = st.buf })
@@ -377,11 +422,15 @@ local function create_input()
           table.insert(state.filters, state.picks[1])
           table.insert(state.prompts, "")
           state.mode, state.picks = Mode.PROMPT, {}
-          evaluate_mod.evaluate(); render.render_list(); render.update_bar(""); clear(); update_virt()
+          evaluate_mod.evaluate()
+          clear()
+          render.render_list(); render.update_bar(""); update_virt()
+          register_picker_actions()
         end
       else
         state.prompts[state.idx] = input
-        evaluate_mod.evaluate(); render.render_list(); render.update_bar(input); update_virt()
+        evaluate_mod.evaluate()
+        render.render_list(); render.update_bar(input); update_virt()
       end
     end
   })

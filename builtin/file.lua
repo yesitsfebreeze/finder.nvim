@@ -5,6 +5,11 @@ local M = {}
 M.accepts = { DataType.File, DataType.FileList }
 M.produces = DataType.GrepList
 M.hidden = true
+M.actions = {
+  ["<C-v>"] = function(item) local u = require("finder.utils"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "vsplit") end,
+  ["<C-x>"] = function(item) local u = require("finder.utils"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "split") end,
+  ["<C-t>"] = function(item) local u = require("finder.utils"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "tabedit") end,
+}
 
 function M.filter(_, items)
   if not items or #items ~= 1 then

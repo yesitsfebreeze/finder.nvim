@@ -28,7 +28,9 @@ end
 
 local defaults = {
   sep = " > ",
-  list_height = 10,
+  list_height = 1,
+  file_width_ratio = 0.4,
+  section_sep = {'─'},
   pickers = {
     Files = "finder.builtin.files",
     Grep = "finder.builtin.grep",
@@ -50,6 +52,9 @@ local M = {
   multi_sel = {},
   toggles = { case = false, word = false, regex = false, gitfiles = false },
   in_git = false,
+  result_cache = {},
+  preview_scroll = 0,
+  frecency = {},
 }
 
 M.Mode = Mode

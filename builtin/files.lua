@@ -6,8 +6,33 @@ local utils = require("finder.utils")
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.Dir, DataType.DirList }
 M.produces = DataType.FileList
+M.actions = {
+  ["<C-v>"] = function(item) utils.open_file_at_line(item, nil, "vsplit") end,
+  ["<C-x>"] = function(item) utils.open_file_at_line(item, nil, "split") end,
+  ["<C-t>"] = function(item) utils.open_file_at_line(item, nil, "tabedit") end,
+}
 
 local file_cache, cache_key_prev = nil, nil
+
+local function sort_by_frecency(filtered)
+  local frecency = state.frecency or {}
+  local now = os.time()
+  local scored = {}
+  for _, item in ipairs(filtered) do
+    local abs = fn.fnamemodify(item, ":p")
+    local entry = frecency[abs]
+    if entry then
+      local age = math.max(1, now - entry.last_access)
+      local recency_weight = 1 / (1 + age / 3600)
+      scored[item] = entry.count * recency_weight
+    end
+  end
+  if not next(scored) then return filtered end
+  table.sort(filtered, function(a, b)
+    return (scored[a] or 0) > (scored[b] or 0)
+  end)
+  return filtered
+end
 
 function M.filter(query, items)
   if not query or query == "" then return {} end
@@ -38,7 +63,7 @@ function M.filter(query, items)
     items = file_cache
   end
 
-  return utils.filter_items(items, query)
+  return sort_by_frecency(utils.filter_items(items, query))
 end
 
 return M

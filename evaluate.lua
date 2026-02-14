@@ -3,6 +3,13 @@ local DataType = state.DataType
 
 local M = {}
 
+local function cache_key(filter_name, query, input_items)
+  local input_hash = input_items and table.concat(input_items, "\0") or ""
+  local toggles = state.toggles or {}
+  local toggle_str = (toggles.case and "C" or "c") .. (toggles.word and "W" or "w") .. (toggles.regex and "R" or "r") .. (toggles.gitfiles and "G" or "g")
+  return filter_name .. "\0" .. query .. "\0" .. input_hash .. "\0" .. toggle_str
+end
+
 function M.get_pickers()
   local opts = state.opts or state.defaults
   local all_pickers = vim.tbl_keys(opts.pickers)
@@ -58,13 +65,19 @@ function M.evaluate()
       return
     end
 
-    local result, err = picker.filter(query, items)
-    if err or result == nil then
-      state.filter_error, state.items = "Malformed Filter", {}; return
+    local ck = cache_key(filter_name, query, items)
+    if state.result_cache[ck] then
+      items = state.result_cache[ck]
+      current_type = picker.produces or DataType.FileList
+    else
+      local result, err = picker.filter(query, items)
+      if err or result == nil then
+        state.filter_error, state.items = "Malformed Filter", {}; return
+      end
+      state.result_cache[ck] = result
+      items = result
+      current_type = picker.produces or DataType.FileList
     end
-
-    items = result
-    current_type = picker.produces or DataType.FileList
   end
 
   state.items = items or {}

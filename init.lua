@@ -10,7 +10,40 @@ local create_input = require("finder.input")
 
 local M = {}
 
+local frecency_path = vim.fn.stdpath("data") .. "/finder_frecency.json"
+
+local function load_frecency()
+  if vim.fn.filereadable(frecency_path) == 1 then
+    local raw = table.concat(vim.fn.readfile(frecency_path), "\n")
+    local ok, data = pcall(vim.json.decode, raw)
+    if ok and type(data) == "table" then
+      state.frecency = data
+      return
+    end
+  end
+  state.frecency = {}
+end
+
+local function save_frecency()
+  local entries = {}
+  for k, v in pairs(state.frecency) do
+    table.insert(entries, { path = k, count = v.count, last_access = v.last_access })
+  end
+  table.sort(entries, function(a, b)
+    return (a.count * math.max(1, a.last_access - 1700000000)) > (b.count * math.max(1, b.last_access - 1700000000))
+  end)
+  local pruned = {}
+  for i = 1, math.min(#entries, 500) do
+    pruned[entries[i].path] = { count = entries[i].count, last_access = entries[i].last_access }
+  end
+  local ok, encoded = pcall(vim.json.encode, pruned)
+  if ok then
+    vim.fn.writefile({ encoded }, frecency_path)
+  end
+end
+
 function M.close()
+  save_frecency()
   render.close_preview()
   if state.input then state.input.close() end
   if state.space then state.space.close() end
@@ -20,6 +53,7 @@ end
 
 function M.enter()
   state.close = M.close
+  load_frecency()
 
   if #state.filters > 0 then
     state.mode, state.idx = Mode.PROMPT, #state.filters

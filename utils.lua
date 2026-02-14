@@ -20,6 +20,11 @@ function M.open_file_at_line(file, line_num)
       cmd("normal! " .. line_num .. "G")
       cmd("normal! zz")
     end
+    local state = require("finder.state")
+    local abs = fn.fnamemodify(file, ":p")
+    state.frecency[abs] = state.frecency[abs] or { count = 0, last_access = 0 }
+    state.frecency[abs].count = state.frecency[abs].count + 1
+    state.frecency[abs].last_access = os.time()
   end
 end
 

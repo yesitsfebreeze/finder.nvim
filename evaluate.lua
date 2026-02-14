@@ -70,6 +70,7 @@ function M.evaluate()
   state.items = items or {}
   state.current_type = current_type
   state.sel = nil
+  state.multi_sel = {}
 end
 
 return M

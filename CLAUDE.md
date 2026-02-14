@@ -22,13 +22,13 @@ An easy-to-edit, visually parseable search engine where you can combine multiple
 - `evaluate.lua` — runs the filter chain, resolves valid pickers
 - `space.lua` — overlay window management (resize, set_line)
 - `utils.lua` — fuzzy filter, item parsing, file opening, highlight matching
-- `builtin/` — built-in pickers (files, grep, commits, file)
+- `builtin/` — built-in pickers (files, grep, commits, file, sessions, dirs)
 
 ### Data types
 
 Pickers declare `accepts` (list of DataType) and `produces` (single DataType). Only pickers compatible with the current chain output are shown.
 
-Built-in types: `None` (0), `FileList` (1), `GrepList` (2), `Commits` (3), `File` (4). External plugins register new types via `state.register_type(name, id)` with a hardcoded numeric ID.
+Built-in types: `None` (0), `FileList` (1), `GrepList` (2), `Commits` (3), `File` (4), `Dir` (5), `DirList` (6). External plugins register new types via `state.register_type(name, id)` with a hardcoded numeric ID.
 
 ## Project rules
 
@@ -44,6 +44,9 @@ Built-in types: `None` (0), `FileList` (1), `GrepList` (2), `Commits` (3), `File
 - `<CR>` and `<Tab>` both confirm — open file or push result forward to next picker
 - `<BS>` at column 1 navigates back through filter chain
 - `<Esc>` clears selection first, then closes on second press
+- `+` / `-` toggle multiselect on/off for the current item
+- `<C-i>` enters interact mode on selected item (rename/delete)
+- `<C-1>` / `<C-2>` / `<C-3>` / `<C-4>` toggle search options (gitfiles/case/word/regex)
 - File preview with treesitter highlighting appears above the results list
 - Results are fuzzy-filtered; uses `fzf`, `fd`, `rg` when available, falls back to built-in Lua
-- Items follow format conventions: FileList = paths, GrepList = `file:line:content`, Commits = free text
+- Items follow format conventions: FileList = paths, GrepList = `file:line:content`, Commits = free text, Dir = directory paths

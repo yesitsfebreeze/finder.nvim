@@ -32,13 +32,17 @@ function M.update_bar(input)
   if not state.space then return end
   local opts = state.opts or state.defaults
   local widths = M.get_widths(input)
-  local virt = { { "?? ", "FinderPrefix" } }
+  local virt = { { "?? ", "FinderColor" } }
 
   for i, filter in ipairs(state.filters) do
     table.insert(virt, { utils.pad(filter, widths[i] or #filter), "FinderInactive" })
     table.insert(virt, { opts.sep, "FinderInactive" })
   end
-  if state.mode == Mode.PICKER then
+
+  if state.mode == Mode.INTERACT then
+    table.insert(virt, { "INTERACT", "FinderHighlight" })
+    table.insert(virt, { "  <CR>=rename  <C-d>=delete  <Esc>=cancel", "FinderInactive" })
+  elseif state.mode == Mode.PICKER then
     local pickers = state.picks or evaluate_mod.get_pickers()
     local prefixes = {}
     for i, name in ipairs(pickers) do
@@ -56,9 +60,9 @@ function M.update_bar(input)
     end
     for i, name in ipairs(pickers) do
       local len = prefixes[name]
-      table.insert(virt, { name:sub(1, len), "FinderPrefix" })
-      table.insert(virt, { name:sub(len + 1), "Normal" })
-      if i < #pickers then table.insert(virt, { "  ", "Normal" }) end
+      table.insert(virt, { name:sub(1, len), "FinderColor" })
+      table.insert(virt, { name:sub(len + 1), "FinderText" })
+      if i < #pickers then table.insert(virt, { "  ", "FinderText" }) end
     end
   end
 
@@ -80,7 +84,7 @@ function M.render_list()
   local top_idx = math.max(1, math.min(active - half, n - visible + 1))
 
   local preview_item = state.items[state.sel or 1]
-  local max_preview = max_height - visible - 5
+  local max_preview = max_height - visible - 4
   local preview_info = nil
   if preview_item then
     local file, line_num = utils.parse_item(preview_item)
@@ -116,18 +120,18 @@ function M.render_list()
   for i = 1, wh - 1 do state.space:set_line(i, {}) end
 
   if state.filter_error then
-    state.space:set_line(wh - 2, { { state.filter_error, "ErrorMsg" } })
+    state.space:set_line(wh - 2, { { state.filter_error, "FinderColor" } })
     M.update_bar(state.mode == Mode.PROMPT and (state.prompts[state.idx] or "") or "")
     return
   end
 
   if n == 0 then
-    state.space:set_line(wh - 2, { { string.format("%d/%d", active, n), "FinderPrefix" } })
+    state.space:set_line(wh - 2, { { string.format("%d/%d", active, n), "FinderColor" } })
     M.update_bar(state.mode == Mode.PROMPT and (state.prompts[state.idx] or "") or "")
     return
   end
 
-  local preview_bottom = wh - 5 - visible
+  local preview_bottom = wh - 4 - visible
   local query = state.prompts[#state.prompts] or ""
   
   if preview_info and preview_bottom > 0 and preview_lines > 0 then
@@ -138,7 +142,8 @@ function M.render_list()
     bo[pbuf].bufhidden = "wipe"
     local content = {}
     for i = preview_info.start_line, preview_info.end_line do
-      table.insert(content, preview_info.lines[i] or "")
+      local line = (preview_info.lines[i] or ""):gsub("\n", "")
+      table.insert(content, line)
     end
     api.nvim_buf_set_lines(pbuf, 0, -1, false, content)
 
@@ -168,20 +173,23 @@ function M.render_list()
     end
 
     preview_state.buf, preview_state.win = pbuf, pwin
-    state.space:set_line(wh - 4 - visible, { { string.rep("─", win_width), "FinderInactive" } })
     if has_top_sep then
       state.space:set_line(1, { { string.rep("─", win_width), "FinderInactive" } })
     end
   end
 
+  state.space:set_line(wh - 3 - visible, { { string.rep("─", win_width), "FinderInactive" } })
+
   local max_w = #tostring(n)
 
   for i = 0, visible - 1 do
     local idx = top_idx + i
-    local lnum = wh - 4 - i
+    local lnum = wh - 3 - i
     local is_sel = state.sel and idx == state.sel
-    local num = string.format(" %" .. max_w .. "d ", idx)
-    local hl = is_sel and "Visual" or "Normal"
+    local is_multi = state.multi_sel[idx]
+    local marker = is_multi and "+" or " "
+    local num = string.format("%s%" .. max_w .. "d ", marker, idx)
+    local hl = is_sel and "FinderHighlight" or "FinderText"
 
     local item = state.items[idx]
     local file, line_num, content = utils.parse_item(item)
@@ -216,23 +224,27 @@ function M.render_list()
       end
       local padding = string.rep(" ", math.max(0, available - #display_content - #file_display))
 
-      local content_virt = utils.highlight_matches(display_content, query, hl, false)
+      local content_virt = utils.highlight_matches(display_content, query, hl)
 
-      local virt = { { num, is_sel and "Visual" or "LineNr" } }
+      local virt = { { num, is_sel and "FinderHighlight" or is_multi and "FinderColor" or "FinderInactive" } }
       for _, v in ipairs(content_virt) do table.insert(virt, v) end
       table.insert(virt, { padding, hl })
-      table.insert(virt, { file_display, is_sel and "Visual" or "FinderInactive" })
+      table.insert(virt, { file_display, is_sel and "FinderHighlight" or "FinderInactive" })
       state.space:set_line(lnum, virt)
     else
-      local item_virt = utils.highlight_matches(item, query, hl, true)
-      local virt = { { num, is_sel and "Visual" or "LineNr" } }
+      local item_virt = utils.highlight_matches(item, query, hl)
+      local virt = { { num, is_sel and "FinderHighlight" or is_multi and "FinderColor" or "FinderInactive" } }
       for _, v in ipairs(item_virt) do table.insert(virt, v) end
       state.space:set_line(lnum, virt)
     end
   end
 
+  local multi_count = vim.tbl_count(state.multi_sel)
+  local count_str = multi_count > 0
+    and string.format("%d/%d [%d]", active, n, multi_count)
+    or string.format("%d/%d", active, n)
   local count_prefix = string.rep(" ", max_w + 1)
-  state.space:set_line(wh - 2, { { count_prefix .. string.format("%d/%d", active, n), "FinderPrefix" } })
+  state.space:set_line(wh - 2, { { count_prefix .. count_str, "FinderColor" } })
   M.update_bar(state.mode == Mode.PROMPT and (state.prompts[state.idx] or "") or "")
 end
 

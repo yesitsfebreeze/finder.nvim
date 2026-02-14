@@ -1,45 +1,72 @@
 local fn = vim.fn
-local DataType = require("finder.state").DataType
+local state = require("finder.state")
+local DataType = state.DataType
 
 local M = {}
-M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.File }
+M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.File, DataType.Dir, DataType.DirList }
 M.produces = DataType.GrepList
 
+M.min_query = 3
+
 function M.filter(query, items)
-  if not query or query == "" then 
-    return items or {}
+  if not query or #query < M.min_query then
+    return {}
   end
 
+  local toggles = state.toggles or {}
+
   if items and #items > 0 and items[1]:match("^[^:]+:%d+:") then
+    local utils = require("finder.utils")
     local filtered = {}
-    local lower_query = query:lower()
     for _, item in ipairs(items) do
       local content = item:match("^[^:]+:%d+:(.*)$")
-      if content and content:lower():find(lower_query, 1, true) then
+      if content and utils.matches(content, query) then
         table.insert(filtered, item)
       end
     end
     return filtered
   end
 
-  local files = nil
+  local dirs, files
   if items and #items > 0 then
-    local set = {}
-    for _, item in ipairs(items) do
-      set[item:match("^([^:]+)") or item] = true
+    if fn.isdirectory(items[1]) == 1 then
+      dirs = table.concat(vim.tbl_map(fn.shellescape, items), " ")
+    else
+      local set = {}
+      for _, item in ipairs(items) do
+        set[item:match("^([^:]+)") or item] = true
+      end
+      files = table.concat(vim.tbl_map(fn.shellescape, vim.tbl_keys(set)), " ")
     end
-    files = table.concat(vim.tbl_map(fn.shellescape, vim.tbl_keys(set)), " ")
   end
+
+  local extra_flags = ""
+  if toggles.case then extra_flags = extra_flags .. " -s" end
+  if not toggles.case then extra_flags = extra_flags .. " -i" end
+  if toggles.word then extra_flags = extra_flags .. " -w" end
+  if not toggles.regex then extra_flags = extra_flags .. " -F" end
 
   local cmd
   if fn.executable("rg") == 1 then
-    cmd = files
-      and string.format("rg --with-filename --line-number --no-heading --color=never %s %s", fn.shellescape(query), files)
-      or string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git' %s", fn.shellescape(query))
+    if dirs then
+      cmd = string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git'%s %s %s", extra_flags, fn.shellescape(query), dirs)
+    elseif files then
+      cmd = string.format("rg --with-filename --line-number --no-heading --color=never%s %s %s", extra_flags, fn.shellescape(query), files)
+    else
+      cmd = string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git'%s %s", extra_flags, fn.shellescape(query))
+    end
   elseif fn.executable("grep") == 1 then
-    cmd = files
-      and string.format("grep -Hn --color=never %s %s", fn.shellescape(query), files)
-      or string.format("grep -rn --color=never --exclude-dir=.git %s .", fn.shellescape(query))
+    local grep_flags = ""
+    if not toggles.case then grep_flags = grep_flags .. " -i" end
+    if toggles.word then grep_flags = grep_flags .. " -w" end
+    if not toggles.regex then grep_flags = grep_flags .. " -F" end
+    if dirs then
+      cmd = string.format("grep -rn --color=never --exclude-dir=.git%s %s %s", grep_flags, fn.shellescape(query), dirs)
+    elseif files then
+      cmd = string.format("grep -Hn --color=never%s %s %s", grep_flags, fn.shellescape(query), files)
+    else
+      cmd = string.format("grep -rn --color=never --exclude-dir=.git%s %s .", grep_flags, fn.shellescape(query))
+    end
   else
     return nil, "no grep tool"
   end

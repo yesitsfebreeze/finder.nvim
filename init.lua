@@ -31,9 +31,15 @@ function M.enter()
   end
   state.cmdh = o.cmdheight
   o.cmdheight = 0
+  package.loaded["finder.theme"] = nil
+  require("finder.theme").apply()
   state.space = create_space()
   state.picks = evaluate_mod.get_pickers()
   state.sel = nil
+  state.multi_sel = {}
+  local fn = vim.fn
+  state.in_git = fn.executable("git") == 1 and fn.systemlist("git rev-parse --is-inside-work-tree 2>/dev/null")[1] == "true"
+  state.toggles.gitfiles = state.in_git
   render.render_list()
   render.update_bar(state.mode == Mode.PROMPT and (state.prompts[state.idx] or "") or "")
   state.input = create_input()

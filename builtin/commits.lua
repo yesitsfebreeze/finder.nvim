@@ -28,7 +28,7 @@ function M.filter(query, items)
 
   if not query or query == "" then return results end
 
-  return utils.fuzzy_filter(results, query)
+  return utils.filter_items(results, query)
 end
 
 return M

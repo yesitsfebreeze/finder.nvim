@@ -14,6 +14,8 @@ require("finder").setup({
     Grep = "finder.builtin.grep",
     Commits = "finder.builtin.commits",
     File = "finder.builtin.file",
+    Sessions = "finder.builtin.sessions",
+    Dirs = "finder.builtin.dirs",
   },
 })
 ```
@@ -33,10 +35,19 @@ Finder has two modes: **picker select** and **prompt**.
 
 | Key | Action |
 |---|---|
-| `<CR>` / `<Tab>` | Confirm selection — open file or push it forward to the next picker |
+| `<CR>` | Open the selected item (or best result if none selected) |
+| `<Tab>` | Push selected item forward to the next filter in the chain |
+| `<S-Tab>` | Delete current filter and go one step back |
 | `<Esc>` | Clear selection, or close finder |
 | `<BS>` | At column 1: navigate back through the filter chain |
 | `<Up>` / `<C-k>` | Select previous item |
+| `+` | Add current item to multiselect |
+| `-` | Remove current item from multiselect |
+| `<C-i>` | Enter interact mode on selected item (rename/delete) |
+| `<C-g>` | Toggle git-files-only mode |
+| `<C-s>` | Toggle case-sensitive search |
+| `<C-w>` | Toggle whole-word search |
+| `<C-x>` | Toggle regex search |
 | `<Down>` / `<C-j>` | Select next item |
 
 ### Data flow
@@ -57,6 +68,8 @@ DataType = {
   GrepList = 2, -- list of file:line:content entries
   Commits = 3,  -- list of commit lines
   File = 4,     -- single file
+  Dir = 5,      -- single directory
+  DirList = 6,  -- list of directory paths
 }
 ```
 
@@ -68,6 +81,8 @@ DataType = {
 | **Grep** | `None`, `FileList`, `GrepList`, `File` | `GrepList` | Searches file contents with `rg` or `grep`. Can narrow within previous grep results. |
 | **Commits** | `None`, `FileList` | `Commits` | Shows git log. Optionally scoped to files from a previous picker. |
 | **File** | `File`, `FileList` | `GrepList` | (Hidden) Opens a single file's lines as grep-style entries. Used internally when you select a file and chain into Grep. |
+| **Sessions** | `None` | `Dir` | Lists nvim sessions from `stdpath("data")/sessions/`. Shows project directory paths. Confirm once to chain into Grep, double-confirm to open the session. |
+| **Dirs** | `None`, `DirList` | `DirList` | Fuzzy-finds directories using `fd` or `find`. Chain into Files or Grep to scope searches. |
 
 ## Writing your own picker
 
@@ -87,6 +102,11 @@ M.produces = DataType.FileList
 
 -- Optional: hide from the picker menu (used for internal pickers like File).
 -- M.hidden = true
+
+-- Optional: called on double-confirm (CR CR or Tab Tab).
+-- If defined, confirming once pushes results forward as usual.
+-- Confirming again immediately calls on_open instead of selecting a picker.
+-- function M.on_open(item) ... end
 
 -- The filter function. Called on every keystroke.
 --   query: string — the user's current input
@@ -176,5 +196,6 @@ M.accepts = { state.DataType.Diagnostics }
 - **FileList**: one file path per entry (`src/init.lua`)
 - **GrepList**: `file:line:content` per entry (`src/init.lua:42:local M = {}`)
 - **Commits**: free-form text, typically `hash message`
+- **Dir/DirList**: directory paths
 
 If your picker produces `GrepList`, file preview and jump-to-line work automatically.

@@ -23,56 +23,81 @@ function M.open_file_at_line(file, line_num)
   end
 end
 
-function M.fuzzy_filter(items, query)
-  local pattern = ".*" .. query:gsub(".", function(c)
-    return c:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0") .. ".*"
-  end)
-  local matches = {}
-  for _, item in ipairs(items) do
-    if item:lower():match(pattern:lower()) then table.insert(matches, item) end
+function M.matches(text, query)
+  local toggles = require("finder.state").toggles or {}
+
+  if toggles.regex then
+    local flags = toggles.case and "\\C" or "\\c"
+    local wp = toggles.word and "\\<" or ""
+    local ws = toggles.word and "\\>" or ""
+    local ok, re = pcall(vim.regex, flags .. wp .. query .. ws)
+    if not ok then return false end
+    return re:match_str(text) ~= nil
   end
-  return matches
+
+  if toggles.word then
+    local escaped = query:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+    local pattern = "%f[%w_]" .. escaped .. "%f[^%w_]"
+    local t = toggles.case and text or text:lower()
+    local q = toggles.case and pattern or pattern:lower()
+    return t:find(q) ~= nil
+  end
+
+  local t = toggles.case and text or text:lower()
+  local q = toggles.case and query or query:lower()
+  return t:find(q, 1, true) ~= nil
 end
 
-function M.highlight_matches(text, query, base_hl, fuzzy)
-  if not query or query == "" then
-    return { { text, base_hl } }
+function M.filter_items(items, query)
+  if not query or query == "" then return items end
+  local filtered = {}
+  for _, item in ipairs(items) do
+    if M.matches(item, query) then table.insert(filtered, item) end
   end
+  return filtered
+end
 
+function M.highlight_matches(text, query, base_hl)
+  if not query or query == "" then return { { text, base_hl } } end
+
+  local toggles = require("finder.state").toggles or {}
   local result = {}
-  local lower_text = text:lower()
-  local lower_query = query:lower()
 
-  if fuzzy then
-    local pos = 1
-    local qi = 1
-    while pos <= #text and qi <= #lower_query do
-      local char = lower_query:sub(qi, qi)
-      local found = lower_text:find(char, pos, true)
-      if found then
-        if found > pos then
-          table.insert(result, { text:sub(pos, found - 1), base_hl })
-        end
-        table.insert(result, { text:sub(found, found), "FinderMatch" })
-        pos = found + 1
-        qi = qi + 1
-      else
-        break
-      end
-    end
-    if pos <= #text then
-      table.insert(result, { text:sub(pos), base_hl })
-    end
-  else
+  if toggles.regex then
+    local flags = toggles.case and "\\C" or "\\c"
+    local wp = toggles.word and "\\<" or ""
+    local ws = toggles.word and "\\>" or ""
+    local ok, re = pcall(vim.regex, flags .. wp .. query .. ws)
+    if not ok then return { { text, base_hl } } end
     local pos = 1
     while pos <= #text do
-      local start_pos, end_pos = lower_text:find(lower_query, pos, true)
-      if start_pos then
-        if start_pos > pos then
-          table.insert(result, { text:sub(pos, start_pos - 1), base_hl })
-        end
-        table.insert(result, { text:sub(start_pos, end_pos), "FinderMatch" })
-        pos = end_pos + 1
+      local s, e = re:match_str(text:sub(pos))
+      if not s or e <= s then
+        table.insert(result, { text:sub(pos), base_hl })
+        break
+      end
+      if s > 0 then table.insert(result, { text:sub(pos, pos + s - 1), base_hl }) end
+      table.insert(result, { text:sub(pos + s, pos + e - 1), "FinderHighlight" })
+      pos = pos + e
+    end
+  else
+    local lower_text = toggles.case and text or text:lower()
+    local q, plain
+    if toggles.word then
+      local escaped = query:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+      q = "%f[%w_]" .. (toggles.case and escaped or escaped:lower()) .. "%f[^%w_]"
+      plain = false
+    else
+      q = toggles.case and query or query:lower()
+      plain = true
+    end
+    local pos = 1
+    while pos <= #text do
+      local s, e = lower_text:find(q, pos, plain)
+      if s then
+        if s > pos then table.insert(result, { text:sub(pos, s - 1), base_hl }) end
+        table.insert(result, { text:sub(s, e), "FinderHighlight" })
+        pos = e + 1
       else
         table.insert(result, { text:sub(pos), base_hl })
         break
@@ -80,9 +105,7 @@ function M.highlight_matches(text, query, base_hl, fuzzy)
     end
   end
 
-  if #result == 0 then
-    return { { text, base_hl } }
-  end
+  if #result == 0 then return { { text, base_hl } } end
   return result
 end
 

@@ -1,4 +1,4 @@
-local Mode = { PICKER = 1, PROMPT = 2 }
+local Mode = { PICKER = 1, PROMPT = 2, INTERACT = 3 }
 
 local DataType = {
   None = 0,
@@ -6,9 +6,9 @@ local DataType = {
   GrepList = 2,
   Commits = 3,
   File = 4,
+  Dir = 5,
+  DirList = 6,
 }
-
-local _next_id = 5
 
 local function register_type(name, id)
   assert(type(name) == "string", "register_type: name must be a string")
@@ -34,6 +34,8 @@ local defaults = {
     Grep = "finder.builtin.grep",
     Commits = "finder.builtin.commits",
     File = "finder.builtin.file",
+    Sessions = "finder.builtin.sessions",
+    Dirs = "finder.builtin.dirs",
   },
 }
 
@@ -45,6 +47,9 @@ local M = {
   idx = 0,
   items = {},
   sel = nil,
+  multi_sel = {},
+  toggles = { case = false, word = false, regex = false, gitfiles = false },
+  in_git = false,
 }
 
 M.Mode = Mode

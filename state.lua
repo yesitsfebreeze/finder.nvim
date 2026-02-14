@@ -28,7 +28,7 @@ end
 
 local defaults = {
   sep = " > ",
-  list_height = 1,
+  list_height = 16,
   file_width_ratio = 0.4,
   section_sep = {'─'},
   pickers = {
@@ -67,6 +67,9 @@ local M = {
   result_cache = {},
   preview_scroll = 0,
   frecency = {},
+  loading = false,
+  loading_timer = nil,
+  loading_frame = 0,
 }
 
 M.Mode = Mode

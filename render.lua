@@ -16,7 +16,7 @@ function M.close_preview()
     api.nvim_win_close(preview_state.win, true)
   end
   preview_state.win, preview_state.buf = nil, nil
-  preview_state.file, preview_state.start_line, preview_state.end_line = nil, nil, nil
+  preview_state.file, preview_state.start_line, preview_state.end_line, preview_state.match_line = nil, nil, nil, nil
 end
 
 function M.get_widths(input)
@@ -151,6 +151,10 @@ function M.render_list()
   end
 
   if n == 0 then
+    if state.loading then
+      local dots = string.rep(".", (state.loading_frame % 3) + 1)
+      state.space:set_line(wh - layout.bar_lines - layout.sep_size, { { " " .. dots, "FinderInactive" } })
+    end
     M.update_bar(state.mode == Mode.PROMPT and (state.prompts[state.idx] or "") or "")
     return
   end
@@ -191,8 +195,43 @@ function M.render_list()
 
     local same_file = preview_state.file == preview_info.file
     local same_range = same_file and preview_state.start_line == preview_info.start_line and preview_state.end_line == preview_info.end_line
+    local same_match = same_range and preview_state.match_line == preview_info.match_line
     local can_reuse_win = same_file and preview_state.buf and api.nvim_buf_is_valid(preview_state.buf)
       and preview_state.win and api.nvim_win_is_valid(preview_state.win)
+
+    local function apply_match_highlights(pbuf, content)
+      local ns = api.nvim_create_namespace("finder_preview")
+      api.nvim_buf_clear_namespace(pbuf, ns, 0, -1)
+      if not preview_info.match_line then return end
+      local match_row = preview_info.match_line - preview_info.start_line
+      api.nvim_buf_set_extmark(pbuf, ns, match_row, 0, { line_hl_group = "CursorLine" })
+      local match_content = content[match_row + 1]
+      if not match_content or not query or query == "" then return end
+      local toggles = state.toggles or {}
+      local s, e
+      if toggles.regex then
+        local flags = toggles.case and "\\C" or "\\c"
+        local wp = toggles.word and "\\<" or ""
+        local ws = toggles.word and "\\>" or ""
+        local ok, re = pcall(vim.regex, flags .. wp .. query .. ws)
+        if ok then s, e = re:match_str(match_content) end
+      else
+        local plain = not toggles.word
+        local q_pat
+        if toggles.word then
+          local escaped = query:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+          q_pat = "%f[%w_]" .. (toggles.case and escaped or escaped:lower()) .. "%f[^%w_]"
+        else
+          q_pat = toggles.case and query or query:lower()
+        end
+        local search_line = toggles.case and match_content or match_content:lower()
+        s, e = search_line:find(q_pat, 1, plain)
+        if s then s, e = s - 1, e end
+      end
+      if s and e and e > s then
+        api.nvim_buf_set_extmark(pbuf, ns, match_row, s, { end_col = e, hl_group = "FinderHighlight" })
+      end
+    end
 
     if can_reuse_win and same_range then
       api.nvim_win_set_config(preview_state.win, {
@@ -200,6 +239,11 @@ function M.render_list()
         width = layout.win_width, height = lines_to_show,
         row = preview_row, col = 0,
       })
+      if not same_match then
+        local content = api.nvim_buf_get_lines(preview_state.buf, 0, -1, false)
+        apply_match_highlights(preview_state.buf, content)
+        preview_state.match_line = preview_info.match_line
+      end
     else
       M.close_preview()
 
@@ -229,17 +273,13 @@ function M.render_list()
       wo[pwin].signcolumn = "no"
       wo[pwin].statuscolumn = "%=%{v:lnum+" .. (preview_info.start_line - 1) .. "} "
 
-      if preview_info.match_line then
-        local ns = api.nvim_create_namespace("finder_preview")
-        api.nvim_buf_set_extmark(pbuf, ns, preview_info.match_line - preview_info.start_line, 0, {
-          line_hl_group = "CursorLine",
-        })
-      end
+      apply_match_highlights(pbuf, content)
 
       preview_state.buf, preview_state.win = pbuf, pwin
       preview_state.file = preview_info.file
       preview_state.start_line = preview_info.start_line
       preview_state.end_line = preview_info.end_line
+      preview_state.match_line = preview_info.match_line
     end
 
   end

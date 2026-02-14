@@ -45,6 +45,12 @@ end
 function M.close()
   save_frecency()
   render.close_preview()
+  if state.loading_timer then
+    state.loading_timer:stop()
+    state.loading_timer:close()
+    state.loading_timer = nil
+  end
+  state.loading = false
   if state.input then state.input.close() end
   if state.space then state.space.close() end
   o.cmdheight = state.cmdh or 1
@@ -80,8 +86,11 @@ function M.enter()
 end
 
 function M.setup(opts)
+  _G.Finder = M
   state.opts = vim.tbl_deep_extend("force", state.defaults, opts or {})
   api.nvim_create_user_command("Finder", M.enter, {})
 end
+
+state.opts = vim.tbl_deep_extend("force", state.defaults, {})
 
 return M

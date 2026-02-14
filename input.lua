@@ -132,7 +132,33 @@ local function create_input()
   end
 
   local function nav_back(del)
-    if fn.col(".") > 1 then return false end
+    if fn.col(".") > 1 then
+      if del and state.mode == Mode.PROMPT and #get() == 1 then
+        -- deleting the last character: go back
+        if state.idx > 1 then
+          table.remove(state.filters, state.idx)
+          table.remove(state.prompts, state.idx)
+          table.remove(state.filter_inputs, state.idx)
+          state.idx = state.idx - 1
+          evaluate_mod.evaluate()
+          local txt = state.prompts[state.idx] or ""
+          set(txt, true); render.render_list(); render.update_bar(txt); update_virt()
+          register_picker_actions()
+        else
+          table.remove(state.filters, state.idx)
+          table.remove(state.prompts, state.idx)
+          table.remove(state.filter_inputs, state.idx)
+          state.idx = state.idx - 1
+          evaluate_mod.evaluate()
+          state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
+          clear(); render.update_bar("")
+          render.render_list(); update_virt()
+          register_picker_actions()
+        end
+        return true
+      end
+      return false
+    end
 
     if state.mode == Mode.PICKER then
       if #state.filters > 0 then
@@ -146,15 +172,26 @@ local function create_input()
 
     local cur = get()
     if del and cur == "" and state.idx > 0 then
-      table.remove(state.filters, state.idx)
-      table.remove(state.prompts, state.idx)
-      table.remove(state.filter_inputs, state.idx)
-      state.idx = state.idx - 1
-      evaluate_mod.evaluate()
-      state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
-      clear(); render.update_bar("")
-      render.render_list(); update_virt()
-      register_picker_actions()
+      if state.idx > 1 then
+        table.remove(state.filters, state.idx)
+        table.remove(state.prompts, state.idx)
+        table.remove(state.filter_inputs, state.idx)
+        state.idx = state.idx - 1
+        evaluate_mod.evaluate()
+        local txt = state.prompts[state.idx] or ""
+        set(txt, true); render.render_list(); render.update_bar(txt); update_virt()
+        register_picker_actions()
+      else
+        table.remove(state.filters, state.idx)
+        table.remove(state.prompts, state.idx)
+        table.remove(state.filter_inputs, state.idx)
+        state.idx = state.idx - 1
+        evaluate_mod.evaluate()
+        state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
+        clear(); render.update_bar("")
+        render.render_list(); update_virt()
+        register_picker_actions()
+      end
       return true
     end
 
@@ -183,6 +220,13 @@ local function create_input()
 
   st.buf = api.nvim_create_buf(false, true)
   bo[st.buf].bufhidden, bo[st.buf].buftype = "wipe", "nofile"
+
+  -- Disable nvim-cmp for this buffer so it doesn't steal <Tab>
+  local cmp_ok, cmp = pcall(require, "cmp")
+  if cmp_ok then
+    cmp.setup.buffer({ enabled = false })
+  end
+
   local init = (state.mode == Mode.PROMPT and state.idx > 0) and (state.prompts[state.idx] or "") or ""
   api.nvim_buf_set_lines(st.buf, 0, -1, false, { init })
   update_virt()
@@ -230,16 +274,33 @@ local function create_input()
       return
     end
 
+    local grep_query = nil
+    if state.current_type == DataType.GrepList then
+      grep_query = state.prompts[state.idx] or ""
+    end
     state.close()
     for _, item in ipairs(selected) do
       local file, line_num = utils.parse_item(item)
-      utils.open_file_at_line(file, line_num)
+      utils.open_file_at_line(file, line_num, nil, grep_query)
     end
   end
 
+  local tab_cycling = false
+
   local function push_forward()
+    print("[TAB] mode=" .. tostring(state.mode) .. " PICKER=" .. tostring(Mode.PICKER) .. " PROMPT=" .. tostring(Mode.PROMPT) .. " idx=" .. tostring(state.idx) .. " #items=" .. tostring(#state.items) .. " current_type=" .. tostring(state.current_type))
     if state.mode == Mode.PICKER then
-      api.nvim_feedkeys(opts.sep, "n", false)
+      local all = evaluate_mod.get_pickers()
+      print("[TAB] PICKER branch, #pickers=" .. tostring(#all) .. " pickers=" .. table.concat(all, ","))
+      if #all == 0 then return end
+      local input = get()
+      local current_idx = 0
+      for i, name in ipairs(all) do
+        if name == input then current_idx = i; break end
+      end
+      local next_idx = (current_idx % #all) + 1
+      tab_cycling = true
+      set(all[next_idx], true)
       return
     end
     state.pending_open = nil
@@ -250,12 +311,15 @@ local function create_input()
       for _, i in ipairs(idxs) do
         if state.items[i] then table.insert(selected_items, state.items[i]) end
       end
+    elseif state.sel and state.items[state.sel] then
+      table.insert(selected_items, state.items[state.sel])
     else
-      local target_idx = state.sel or (#state.items == 1 and 1 or nil)
-      if not target_idx or not state.items[target_idx] then return end
-      table.insert(selected_items, state.items[target_idx])
+      for _, item in ipairs(state.items) do
+        table.insert(selected_items, item)
+      end
     end
-    local item = selected_items[1]
+
+    if #selected_items == 0 then return end
 
     if state.current_type == DataType.Dir then
       state.filter_inputs[state.idx + 1] = { items = selected_items, type = DataType.Dir }
@@ -264,7 +328,7 @@ local function create_input()
       local cur_picker_path = opts.pickers[state.filters[state.idx]]
       local pok, picker = pcall(require, cur_picker_path)
       if pok and picker and picker.on_open then
-        state.pending_open = { fn = picker.on_open, item = item }
+        state.pending_open = { fn = picker.on_open, item = selected_items[1] }
       end
       state.mode = Mode.PICKER
       state.picks = evaluate_mod.get_pickers()
@@ -276,31 +340,23 @@ local function create_input()
       return
     end
 
-    local file = utils.parse_item(item)
-    local forward_items = {}
-    for _, sel_item in ipairs(selected_items) do
-      table.insert(forward_items, (utils.parse_item(sel_item)))
-    end
+    local forward_type = state.current_type or DataType.FileList
+    state.filter_inputs[state.idx + 1] = { items = selected_items, type = forward_type }
 
-    state.idx = state.idx + 1
-    state.filter_inputs[state.idx] = { items = forward_items, type = DataType.FileList }
-    table.insert(state.filters, "Grep")
-    table.insert(state.prompts, "")
-
-    local prev_picker_path = opts.pickers[state.filters[#state.filters - 1]]
-    local pok, picker = pcall(require, prev_picker_path)
+    local cur_picker_path = opts.pickers[state.filters[state.idx]]
+    local pok, picker = pcall(require, cur_picker_path)
     if pok and picker and picker.on_open then
-      state.pending_open = { fn = picker.on_open, item = file }
+      state.pending_open = { fn = picker.on_open, item = selected_items[1] }
     end
 
-    state.mode = Mode.PROMPT
+    state.mode = Mode.PICKER
+    state.picks = evaluate_mod.get_pickers()
     state.sel = nil
-    evaluate_mod.evaluate()
+    state.multi_sel = {}
     render.render_list()
     render.update_bar("")
     update_virt()
     clear()
-    register_picker_actions()
   end
 
   local function step_back()
@@ -409,7 +465,7 @@ local function create_input()
     local idx = state.sel or (#state.items > 0 and 1 or nil)
     if not idx then return end
     state.multi_sel[idx] = nil
-    sel_up()
+    sel_down()
   end)
 
   api.nvim_create_autocmd("TextChangedI", {
@@ -419,19 +475,25 @@ local function create_input()
       if state.mode == Mode.PICKER then
         state.pending_open = nil
         local all = evaluate_mod.get_pickers()
-        state.picks = input == "" and all or vim.tbl_filter(function(n)
-          return n:lower():sub(1, #input) == input:lower()
-        end, all)
-        render.update_bar(input)
-        if #state.picks == 1 then
-          state.idx = state.idx + 1
-          table.insert(state.filters, state.picks[1])
-          table.insert(state.prompts, "")
-          state.mode, state.picks = Mode.PROMPT, {}
-          evaluate_mod.evaluate()
-          clear()
-          render.render_list(); render.update_bar(""); update_virt()
-          register_picker_actions()
+        if tab_cycling then
+          tab_cycling = false
+          state.picks = all
+          render.update_bar(input)
+        else
+          state.picks = input == "" and all or vim.tbl_filter(function(n)
+            return n:lower():sub(1, #input) == input:lower()
+          end, all)
+          render.update_bar(input)
+          if #state.picks == 1 then
+            state.idx = state.idx + 1
+            table.insert(state.filters, state.picks[1])
+            table.insert(state.prompts, "")
+            state.mode, state.picks = Mode.PROMPT, {}
+            evaluate_mod.evaluate()
+            clear()
+            render.render_list(); render.update_bar(""); update_virt()
+            register_picker_actions()
+          end
         end
       else
         state.prompts[state.idx] = input

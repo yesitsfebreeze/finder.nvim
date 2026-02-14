@@ -2,6 +2,80 @@
 
 A composable fuzzy finder for Neovim. Pickers chain together — pipe Files into Grep, Grep into Commits, etc. No dependencies beyond Neovim 0.10+.
 
+## Installation
+
+<details>
+<summary><b>lazy.nvim</b></summary>
+
+```lua
+{
+  "feb/finder.nvim",
+  config = function()
+    require("finder").setup({})
+  end,
+}
+```
+
+</details>
+
+<details>
+<summary><b>packer.nvim</b></summary>
+
+```lua
+use {
+  "feb/finder.nvim",
+  config = function()
+    require("finder").setup({})
+  end,
+}
+```
+
+</details>
+
+<details>
+<summary><b>mini.deps</b></summary>
+
+```lua
+MiniDeps.add("feb/finder.nvim")
+require("finder").setup({})
+```
+
+</details>
+
+<details>
+<summary><b>vim-plug</b></summary>
+
+```vim
+Plug 'feb/finder.nvim'
+```
+
+```lua
+-- in your init.lua, after plug#end()
+require("finder").setup({})
+```
+
+</details>
+
+<details>
+<summary><b>Manual / No plugin manager</b></summary>
+
+Clone the repo into your Neovim runtime path:
+
+```sh
+git clone https://github.com/feb/finder.nvim \
+  ~/.local/share/nvim/site/pack/plugins/start/finder.nvim
+```
+
+Then in your config:
+
+```lua
+require("finder").setup({})
+```
+
+`setup()` is optional — the plugin applies defaults on `require`. Call it to customize options and register the `:Finder` command.
+
+</details>
+
 ## Usage
 
 ```lua

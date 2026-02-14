@@ -28,6 +28,7 @@ end
 
 function M.evaluate()
   state.filter_error = nil
+  state.loading = false
 
   if #state.filters == 0 then
     state.items = {}
@@ -71,6 +72,13 @@ function M.evaluate()
       current_type = picker.produces or DataType.FileList
     else
       local result, err = picker.filter(query, items)
+      if err == "async" then
+        state.items = result or {}
+        state.current_type = picker.produces or DataType.FileList
+        state.sel = nil
+        state.multi_sel = {}
+        return
+      end
       if err or result == nil then
         state.filter_error, state.items = "Malformed Filter", {}; return
       end

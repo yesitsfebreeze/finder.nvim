@@ -1,8 +1,8 @@
 local fn = vim.fn
-local state = require("finder.state")
+local state = require("finder.src.state")
 local DataType = state.DataType
-local utils = require("finder.utils")
-local display = require("finder.display")
+local utils = require("finder.src.utils")
+local display = require("finder.src.display")
 
 local M = {}
 M.accepts = { DataType.None }

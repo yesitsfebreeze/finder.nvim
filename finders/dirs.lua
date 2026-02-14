@@ -1,12 +1,17 @@
 local fn = vim.fn
-local DataType = require("finder.state").DataType
-local utils = require("finder.utils")
+local DataType = require("finder.src.state").DataType
+local utils = require("finder.src.utils")
 
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.DirList, DataType.Commits }
 M.produces = DataType.DirList
 
 local dir_cache, cache_cwd = nil, nil
+
+function M.enter()
+  dir_cache = nil
+  cache_cwd = nil
+end
 
 function M.filter(query, items)
   if not query or query == "" then return {} end

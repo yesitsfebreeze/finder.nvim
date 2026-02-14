@@ -2,7 +2,7 @@ local Mode = { PICKER = 1, PROMPT = 2, INTERACT = 3 }
 
 local DEBOUNCE_DELAY = 25
 
-local DataType = require("finder.types")
+local DataType = require("finder.src.types")
 
 local defaults = {
   sep = " > ",
@@ -77,7 +77,7 @@ function M.start_loading()
         return
       end
       M.loading_frame = (M.loading_frame + 1) % 3
-      require("finder.render").render_list()
+      require("finder.src.render").render_list()
     end))
   end
 end

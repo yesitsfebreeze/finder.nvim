@@ -1,17 +1,18 @@
 local api = vim.api
 local o = vim.o
 
-local state = require("finder.state")
+local state = require("finder.src.state")
 local Mode = state.Mode
 local create_space = require("space")
-local evaluate_mod = require("finder.evaluate")
-local render = require("finder.render")
-local create_input = require("finder.input")
-local utils = require("finder.utils")
+local evaluate_mod = require("finder.src.evaluate")
+local render = require("finder.src.render")
+local create_input = require("finder.src.input")
+local utils = require("finder.src.utils")
 
 local M = {}
 
 local frecency_path = vim.fn.stdpath("data") .. "/finder_frecency.json"
+local FRECENCY_EPOCH = 1700000000
 
 function M.close()
   local entries = {}
@@ -19,7 +20,7 @@ function M.close()
     table.insert(entries, { path = k, count = v.count, last_access = v.last_access })
   end
   table.sort(entries, function(a, b)
-    return (a.count * math.max(1, a.last_access - 1700000000)) > (b.count * math.max(1, b.last_access - 1700000000))
+    return (a.count * math.max(1, a.last_access - FRECENCY_EPOCH)) > (b.count * math.max(1, b.last_access - FRECENCY_EPOCH))
   end)
   local pruned = {}
   for i = 1, math.min(#entries, 500) do
@@ -64,8 +65,16 @@ function M.enter()
   end
   state.cmdh = o.cmdheight
   o.cmdheight = 0
-  package.loaded["finder.theme"] = nil
-  require("finder.theme").apply()
+  state.result_cache = {}
+  -- Notify loaded pickers to clear stale caches
+  local opts = state.opts or state.defaults
+  for _, picker_path in pairs(opts.pickers) do
+    local loaded = package.loaded[picker_path]
+    if loaded and type(loaded.enter) == "function" then
+      loaded.enter()
+    end
+  end
+  require("finder.src.theme").apply()
   state.space = create_space()
   state.picks = evaluate_mod.get_pickers()
   state.sel = nil

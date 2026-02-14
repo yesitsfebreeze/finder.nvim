@@ -2,8 +2,8 @@ local api = vim.api
 local bo = vim.bo
 local wo = vim.wo
 
-local function create_space()
-  local orig_win = api.nvim_get_current_win()
+local function create_space(target_win)
+  local orig_win = target_win or api.nvim_get_current_win()
   local win_height = api.nvim_win_get_height(orig_win)
   local width = api.nvim_win_get_width(orig_win)
   local ns = api.nvim_create_namespace("finder.space")

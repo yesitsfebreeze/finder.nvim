@@ -20,6 +20,7 @@ function M.apply()
   local color = hl_attr("Function", "fg") or defaults.color
 
   api.nvim_set_hl(0, "FinderColor",     { fg = color })
+  api.nvim_set_hl(0, "FinderError",     { fg = hl_attr("DiagnosticError", "fg") or "#ff5555" })
   api.nvim_set_hl(0, "FinderInactive",  { fg = hl_attr("Comment", "fg")  or defaults.inactive })
   api.nvim_set_hl(0, "FinderText",      { fg = hl_attr("Normal", "fg")   or defaults.text })
   api.nvim_set_hl(0, "FinderSeparator", { fg = color, bg = defaults.sep_bg })

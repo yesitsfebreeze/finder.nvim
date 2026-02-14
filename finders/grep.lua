@@ -1,14 +1,58 @@
 local fn = vim.fn
-local state = require("finder.state")
+local state = require("finder.src.state")
 local DataType = state.DataType
-local utils = require("finder.utils")
+local utils = require("finder.src.utils")
 
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.File, DataType.Dir, DataType.DirList, DataType.Commits }
 M.produces = DataType.GrepList
-M.actions = require("finder.utils").grep_query_open_actions
+M.actions = require("finder.src.utils").grep_query_open_actions
 
-local pending = { job = nil, cmd = nil, cache = {} }
+local function strip_dot_prefix(result)
+  local cleaned = {}
+  if result.code <= 1 and result.stdout then
+    for line in result.stdout:gmatch("[^\n]+") do
+      if line ~= "" then
+        table.insert(cleaned, (line:gsub("^%./", "")))
+      end
+    end
+  end
+  return cleaned
+end
+
+local run_async = utils.async_filter(function(query, ctx)
+  local toggles = state.toggles or {}
+  local dirs, files = ctx.dirs, ctx.files
+
+  local extra_flags = ""
+  if toggles.case then extra_flags = extra_flags .. " -s" end
+  if not toggles.case then extra_flags = extra_flags .. " -i" end
+  if toggles.word then extra_flags = extra_flags .. " -w" end
+  if not toggles.regex then extra_flags = extra_flags .. " -F" end
+
+  if fn.executable("rg") == 1 then
+    if dirs then
+      return string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git'%s %s %s", extra_flags, fn.shellescape(query), dirs)
+    elseif files then
+      return string.format("rg --with-filename --line-number --no-heading --color=never%s %s %s", extra_flags, fn.shellescape(query), files)
+    else
+      return string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git'%s %s", extra_flags, fn.shellescape(query))
+    end
+  elseif fn.executable("grep") == 1 then
+    local grep_flags = ""
+    if not toggles.case then grep_flags = grep_flags .. " -i" end
+    if toggles.word then grep_flags = grep_flags .. " -w" end
+    if not toggles.regex then grep_flags = grep_flags .. " -F" end
+    if dirs then
+      return string.format("grep -rn --color=never --exclude-dir=.git%s %s %s", grep_flags, fn.shellescape(query), dirs)
+    elseif files then
+      return string.format("grep -Hn --color=never%s %s %s", grep_flags, fn.shellescape(query), files)
+    else
+      return string.format("grep -rn --color=never --exclude-dir=.git%s %s .", grep_flags, fn.shellescape(query))
+    end
+  end
+  return nil
+end, strip_dot_prefix)
 
 function M.filter(query, items)
 
@@ -45,82 +89,11 @@ function M.filter(query, items)
     end
   end
 
-  local extra_flags = ""
-  if toggles.case then extra_flags = extra_flags .. " -s" end
-  if not toggles.case then extra_flags = extra_flags .. " -i" end
-  if toggles.word then extra_flags = extra_flags .. " -w" end
-  if not toggles.regex then extra_flags = extra_flags .. " -F" end
-
-  local cmd
-  if fn.executable("rg") == 1 then
-    if dirs then
-      cmd = string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git'%s %s %s", extra_flags, fn.shellescape(query), dirs)
-    elseif files then
-      cmd = string.format("rg --with-filename --line-number --no-heading --color=never%s %s %s", extra_flags, fn.shellescape(query), files)
-    else
-      cmd = string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git'%s %s", extra_flags, fn.shellescape(query))
-    end
-  elseif fn.executable("grep") == 1 then
-    local grep_flags = ""
-    if not toggles.case then grep_flags = grep_flags .. " -i" end
-    if toggles.word then grep_flags = grep_flags .. " -w" end
-    if not toggles.regex then grep_flags = grep_flags .. " -F" end
-    if dirs then
-      cmd = string.format("grep -rn --color=never --exclude-dir=.git%s %s %s", grep_flags, fn.shellescape(query), dirs)
-    elseif files then
-      cmd = string.format("grep -Hn --color=never%s %s %s", grep_flags, fn.shellescape(query), files)
-    else
-      cmd = string.format("grep -rn --color=never --exclude-dir=.git%s %s .", grep_flags, fn.shellescape(query))
-    end
-  else
+  if fn.executable("rg") ~= 1 and fn.executable("grep") ~= 1 then
     return nil, "no grep tool"
   end
 
-  if pending.cache[cmd] then
-    local result = pending.cache[cmd]
-    pending.cache = {}
-    state.stop_loading()
-    return result
-  end
-
-  if pending.job then
-    pcall(function() pending.job:kill() end)
-    pending.job = nil
-  end
-
-  pending.cmd = cmd
-  pending.cache = {}
-  state.start_loading()
-
-  pending.job = vim.system(
-    { "sh", "-c", cmd .. " 2>/dev/null" },
-    { text = true },
-    function(result)
-      vim.schedule(function()
-        if pending.cmd ~= cmd then return end
-        if not state.space then state.stop_loading(); return end
-
-        local cleaned = {}
-        if result.code <= 1 and result.stdout then
-          for line in result.stdout:gmatch("[^\n]+") do
-            if line ~= "" then
-              table.insert(cleaned, (line:gsub("^%./", "")))
-            end
-          end
-        end
-
-        pending.cache = { [cmd] = cleaned }
-        pending.job = nil
-
-        require("finder.evaluate").evaluate()
-        local r = require("finder.render")
-        r.render_list()
-        r.update_bar(state.prompts[state.idx] or "")
-      end)
-    end
-  )
-
-  return {}, "async"
+  return run_async(query, { dirs = dirs, files = files })
 end
 
 return M

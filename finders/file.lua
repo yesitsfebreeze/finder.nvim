@@ -1,11 +1,11 @@
 local fn = vim.fn
-local DataType = require("finder.state").DataType
+local DataType = require("finder.src.state").DataType
 
 local M = {}
 M.accepts = { DataType.File, DataType.FileList, DataType.GrepList }
 M.produces = DataType.GrepList
 M.hidden = true
-M.actions = require("finder.utils").grep_open_actions
+M.actions = require("finder.src.utils").grep_open_actions
 
 function M.filter(_, items)
   if not items or #items ~= 1 then
@@ -17,6 +17,11 @@ function M.filter(_, items)
   
   if fn.filereadable(file) ~= 1 or fn.isdirectory(file) == 1 then
     return nil, "cannot read file"
+  end
+
+  local fsize = fn.getfsize(file)
+  if fsize > 1048576 then
+    return nil, "file too large for preview"
   end
 
   local lines = fn.readfile(file)

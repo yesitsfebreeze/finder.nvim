@@ -4,15 +4,13 @@ local cmd = vim.cmd
 local bo = vim.bo
 local wo = vim.wo
 
-local INPUT_DELAY = 50
-
-local state = require("finder.state")
+local state = require("finder.src.state")
 local Mode = state.Mode
 local DataType = state.DataType
 local create_space = require("space")
-local evaluate_mod = require("finder.evaluate")
-local render = require("finder.render")
-local utils = require("finder.utils")
+local evaluate_mod = require("finder.src.evaluate")
+local render = require("finder.src.render")
+local utils = require("finder.src.utils")
 
 local function create_input()
   local opts = state.opts or state.defaults
@@ -529,8 +527,9 @@ local function create_input()
     group = aug,
     callback = function()
       if state.space then
+        local orig = state.space.orig()
         state.space.close()
-        state.space = create_space()
+        state.space = create_space(orig)
         render.render_list()
         if st.win and api.nvim_win_is_valid(st.win) then
           api.nvim_win_set_config(st.win, {

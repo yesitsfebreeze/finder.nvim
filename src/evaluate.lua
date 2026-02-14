@@ -1,7 +1,9 @@
-local state = require("finder.state")
+local state = require("finder.src.state")
 local DataType = state.DataType
 
 local M = {}
+
+local picker_load_failures = {}
 
 function M.get_pickers()
   local opts = state.opts or state.defaults
@@ -11,11 +13,16 @@ function M.get_pickers()
   local current_type = state.current_type or DataType.None
   local valid = {}
   for _, name in ipairs(all_pickers) do
-    local ok, picker = pcall(require, opts.pickers[name])
-    if not ok then
-      vim.notify("Finder: failed to load picker '" .. name .. "': " .. tostring(picker), vim.log.levels.WARN)
-    elseif picker and not picker.hidden and vim.tbl_contains(picker.accepts or { DataType.None }, current_type) then
-      table.insert(valid, name)
+    if picker_load_failures[name] then
+      -- skip previously failed pickers
+    else
+      local ok, picker = pcall(require, opts.pickers[name])
+      if not ok then
+        picker_load_failures[name] = true
+        vim.notify("Finder: failed to load picker '" .. name .. "': " .. tostring(picker), vim.log.levels.WARN)
+      elseif picker and not picker.hidden and vim.tbl_contains(picker.accepts or { DataType.None }, current_type) then
+        table.insert(valid, name)
+      end
     end
   end
   return valid
@@ -53,10 +60,10 @@ function M.evaluate()
     local ok, picker = pcall(require, picker_path)
     if not ok then
       vim.notify("Finder: failed to load picker '" .. filter_name .. "': " .. tostring(picker), vim.log.levels.WARN)
-      state.filter_error, state.items = "Malformed Filter", {}; return
+      state.filter_error, state.items = "Malformed (Finder '" .. filter_name .. "' could not be loaded)", {}; return
     end
     if not picker or not picker.filter then
-      state.filter_error, state.items = "Malformed Filter", {}; return
+      state.filter_error, state.items = "Malformed (Finder '" .. filter_name .. "' not found)", {}; return
     end
 
     if not vim.tbl_contains(picker.accepts or { DataType.None }, current_type) then
@@ -74,7 +81,8 @@ function M.evaluate()
     end
 
     local toggles = state.toggles or {}
-    local ck = filter_name .. "\0" .. query .. "\0" .. (items and table.concat(items, "\0") or "") .. "\0"
+    local ck = filter_name .. "\0" .. query .. "\0"
+      .. (items and (#items .. "\0" .. (items[1] or "") .. "\0" .. (items[#items] or "")) or "") .. "\0"
       .. (toggles.case and "C" or "c") .. (toggles.word and "W" or "w")
       .. (toggles.regex and "R" or "r") .. (toggles.gitfiles and "G" or "g")
     if state.result_cache[ck] then
@@ -90,7 +98,9 @@ function M.evaluate()
         return
       end
       if err or result == nil then
-        state.filter_error, state.items = "Malformed Filter", {}; return
+        state.filter_error = err or ("No results from " .. filter_name)
+        state.items = {}
+        return
       end
       state.result_cache[ck] = result
       items = result

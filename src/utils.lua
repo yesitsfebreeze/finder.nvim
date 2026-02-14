@@ -17,10 +17,6 @@ function M.parse_item(item)
   return file, tonumber(line_num), content
 end
 
-function M.is_git_repo()
-  return fn.executable("git") == 1 and fn.systemlist("git rev-parse --is-inside-work-tree 2>/dev/null")[1] == "true"
-end
-
 function M.open_file_at_line(file, line_num, open_cmd, query)
   if fn.filereadable(file) == 1 then
     cmd((open_cmd or "edit") .. " " .. fn.fnameescape(file))
@@ -32,7 +28,7 @@ function M.open_file_at_line(file, line_num, open_cmd, query)
       local line = vim.api.nvim_get_current_line()
       local s, e = M.find_match(line, query)
       if s and e and e > s then
-        local state = require("finder.state")
+        local state = require("finder.src.state")
         local om = (state.opts or state.defaults).open_mode or {}
         local pos = om.pos or "begin"
         local mmode = om.mode or "normal"
@@ -54,7 +50,7 @@ function M.open_file_at_line(file, line_num, open_cmd, query)
         end
       end
     end
-    local state = require("finder.state")
+    local state = require("finder.src.state")
     local abs = fn.fnamemodify(file, ":p")
     state.frecency[abs] = state.frecency[abs] or { count = 0, last_access = 0 }
     state.frecency[abs].count = state.frecency[abs].count + 1
@@ -64,7 +60,7 @@ end
 
 function M.find_match(text, query, byte_offset)
   if not query or query == "" then return nil end
-  local toggles = require("finder.state").toggles or {}
+  local toggles = require("finder.src.state").toggles or {}
   byte_offset = byte_offset or 0
 
   if toggles.regex then
@@ -206,23 +202,105 @@ function M.extract_dirs(items)
   return out
 end
 
-M.file_open_actions = {
-  ["<C-v>"] = function(item) M.open_file_at_line(item, nil, "vsplit") end,
-  ["<C-x>"] = function(item) M.open_file_at_line(item, nil, "split") end,
-  ["<C-t>"] = function(item) M.open_file_at_line(item, nil, "tabedit") end,
-}
+function M.make_open_actions(strategy)
+  local actions = {}
+  for _, combo in ipairs({ { "<C-v>", "vsplit" }, { "<C-x>", "split" }, { "<C-t>", "tabedit" } }) do
+    local key, open_cmd = combo[1], combo[2]
+    if strategy == "file" then
+      actions[key] = function(item) M.open_file_at_line(item, nil, open_cmd) end
+    elseif strategy == "grep" then
+      actions[key] = function(item)
+        local f, l = M.parse_item(item)
+        M.open_file_at_line(f, l, open_cmd)
+      end
+    elseif strategy == "grep_query" then
+      actions[key] = function(item)
+        local s = require("finder.src.state")
+        local f, l = M.parse_item(item)
+        M.open_file_at_line(f, l, open_cmd, s.prompts[s.idx])
+      end
+    end
+  end
+  return actions
+end
 
-M.grep_open_actions = {
-  ["<C-v>"] = function(item) local f, l = M.parse_item(item); M.open_file_at_line(f, l, "vsplit") end,
-  ["<C-x>"] = function(item) local f, l = M.parse_item(item); M.open_file_at_line(f, l, "split") end,
-  ["<C-t>"] = function(item) local f, l = M.parse_item(item); M.open_file_at_line(f, l, "tabedit") end,
-}
+M.file_open_actions = M.make_open_actions("file")
+M.grep_open_actions = M.make_open_actions("grep")
+M.grep_query_open_actions = M.make_open_actions("grep_query")
 
-M.grep_query_open_actions = {
-  ["<C-v>"] = function(item) local s = require("finder.state"); local f, l = M.parse_item(item); M.open_file_at_line(f, l, "vsplit", s.prompts[s.idx]) end,
-  ["<C-x>"] = function(item) local s = require("finder.state"); local f, l = M.parse_item(item); M.open_file_at_line(f, l, "split", s.prompts[s.idx]) end,
-  ["<C-t>"] = function(item) local s = require("finder.state"); local f, l = M.parse_item(item); M.open_file_at_line(f, l, "tabedit", s.prompts[s.idx]) end,
-}
+function M.show_commit(hash)
+  if not hash then return end
+  local diff = fn.systemlist('git show ' .. fn.shellescape(hash))
+  if vim.v.shell_error ~= 0 then return end
+  vim.cmd('enew')
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, diff)
+  vim.bo[buf].filetype = 'git'
+  vim.bo[buf].bufhidden = 'wipe'
+  vim.bo[buf].buftype = 'nofile'
+  vim.bo[buf].modifiable = false
+end
+
+function M.async_filter(build_cmd, on_result)
+  local pending = { job = nil, cmd = nil, cache = {} }
+
+  return function(query, extra_args)
+    local shell_cmd = build_cmd(query, extra_args)
+    if not shell_cmd then return nil, "no command" end
+
+    if pending.cache[shell_cmd] then
+      local result = pending.cache[shell_cmd]
+      pending.cache = {}
+      local state = require("finder.src.state")
+      state.stop_loading()
+      return result
+    end
+
+    if pending.job then
+      pcall(function() pending.job:kill() end)
+      pending.job = nil
+    end
+
+    pending.cmd = shell_cmd
+    pending.cache = {}
+    local state = require("finder.src.state")
+    state.start_loading()
+
+    pending.job = vim.system(
+      { "sh", "-c", shell_cmd .. " 2>/dev/null" },
+      { text = true },
+      function(result)
+        vim.schedule(function()
+          if pending.cmd ~= shell_cmd then return end
+          if not state.space then state.stop_loading(); return end
+
+          local cleaned
+          if on_result then
+            cleaned = on_result(result)
+          end
+          if not cleaned then
+            cleaned = {}
+            if result.code <= 1 and result.stdout then
+              for line in result.stdout:gmatch("[^\n]+") do
+                if line ~= "" then table.insert(cleaned, line) end
+              end
+            end
+          end
+
+          pending.cache = { [shell_cmd] = cleaned }
+          pending.job = nil
+
+          require("finder.src.evaluate").evaluate()
+          local r = require("finder.src.render")
+          r.render_list()
+          r.update_bar(state.prompts[state.idx] or "")
+        end)
+      end
+    )
+
+    return {}, "async"
+  end
+end
 
 function M.commits_to_grep(items)
   local hashes = {}

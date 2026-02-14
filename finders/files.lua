@@ -1,7 +1,7 @@
 local fn = vim.fn
-local state = require("finder.state")
+local state = require("finder.src.state")
 local DataType = state.DataType
-local utils = require("finder.utils")
+local utils = require("finder.src.utils")
 
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.Dir, DataType.DirList, DataType.Commits }
@@ -9,6 +9,7 @@ M.produces = DataType.FileList
 M.actions = utils.file_open_actions
 
 local file_cache, cache_key_prev = nil, nil
+local cache_generation = 0
 
 local function sort_by_frecency(filtered)
   local frecency = state.frecency or {}
@@ -28,6 +29,12 @@ local function sort_by_frecency(filtered)
     return (scored[a] or 0) > (scored[b] or 0)
   end)
   return filtered
+end
+
+function M.enter()
+  file_cache = nil
+  cache_key_prev = nil
+  cache_generation = cache_generation + 1
 end
 
 function M.filter(query, items)

@@ -1,9 +1,9 @@
 local fn = vim.fn
 local api = vim.api
-local state = require("finder.state")
+local state = require("finder.src.state")
 local DataType = state.DataType
-local utils = require("finder.utils")
-local display = require("finder.display")
+local utils = require("finder.src.utils")
+local display = require("finder.src.display")
 
 local M = {}
 M.accepts = { DataType.None, DataType.File, DataType.FileList, DataType.GrepList }
@@ -153,7 +153,32 @@ local function resolve_buffers(items)
   return bufs
 end
 
+-- set up highlight groups
+local highlights_set = false
+local function setup_highlights()
+  if highlights_set then return end
+  highlights_set = true
+  local links = {
+    FinderSymFile      = "Directory",
+    FinderSymModule    = "Include",
+    FinderSymNamespace = "Include",
+    FinderSymClass     = "Type",
+    FinderSymMethod    = "Function",
+    FinderSymField     = "Identifier",
+    FinderSymEnum      = "Type",
+    FinderSymInterface = "Type",
+    FinderSymFunction  = "Function",
+    FinderSymVariable  = "Identifier",
+    FinderSymConstant  = "Constant",
+    FinderSymStruct    = "Structure",
+  }
+  for group, link in pairs(links) do
+    vim.api.nvim_set_hl(0, group, { link = link, default = true })
+  end
+end
+
 function M.filter(query, items)
+  setup_highlights()
   sym_cache = {}
   local results = {}
   local bufs = resolve_buffers(items)
@@ -175,28 +200,5 @@ function M.filter(query, items)
 
   return results
 end
-
--- set up highlight groups
-local function setup_highlights()
-  local links = {
-    FinderSymFile      = "Directory",
-    FinderSymModule    = "Include",
-    FinderSymNamespace = "Include",
-    FinderSymClass     = "Type",
-    FinderSymMethod    = "Function",
-    FinderSymField     = "Identifier",
-    FinderSymEnum      = "Type",
-    FinderSymInterface = "Type",
-    FinderSymFunction  = "Function",
-    FinderSymVariable  = "Identifier",
-    FinderSymConstant  = "Constant",
-    FinderSymStruct    = "Structure",
-  }
-  for group, link in pairs(links) do
-    vim.api.nvim_set_hl(0, group, { link = link, default = true })
-  end
-end
-
-setup_highlights()
 
 return M

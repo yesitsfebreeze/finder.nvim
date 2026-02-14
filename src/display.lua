@@ -1,4 +1,4 @@
-local utils = require("finder.utils")
+local utils = require("finder.src.utils")
 
 local M = {}
 

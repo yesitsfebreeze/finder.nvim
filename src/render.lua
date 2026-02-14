@@ -3,10 +3,10 @@ local fn = vim.fn
 local bo = vim.bo
 local wo = vim.wo
 
-local state = require("finder.state")
+local state = require("finder.src.state")
 local Mode = state.Mode
-local evaluate_mod = require("finder.evaluate")
-local utils = require("finder.utils")
+local evaluate_mod = require("finder.src.evaluate")
+local utils = require("finder.src.utils")
 
 local M = {}
 local preview_state = { buf = nil, win = nil, file = nil, start_line = nil, end_line = nil }
@@ -33,7 +33,7 @@ function M.update_bar(input)
   if not state.space then return end
   local opts = state.opts or state.defaults
   local widths = M.get_widths(input)
-  local virt = { { "?? ", "FinderCount" } }
+  local virt = {}
 
   for i, filter in ipairs(state.filters) do
     table.insert(virt, { utils.pad(filter, widths[i] or #filter), "FinderInactive" })
@@ -113,25 +113,28 @@ function M.render_list()
     local file, line_num = utils.parse_item(preview_item)
 
     if fn.filereadable(file) == 1 and fn.isdirectory(file) ~= 1 then
-      local lines = fn.readfile(file)
-      if #lines > 0 then
-        local preview_lines = math.min(#lines, max_preview)
-        local scroll = state.preview_scroll or 0
-        local start_line, end_line
-        if line_num and line_num > 0 then
-          local half_preview = math.floor(preview_lines / 2)
-          start_line = math.max(1, line_num - half_preview + scroll)
-          end_line = start_line + preview_lines - 1
-          if end_line > #lines then
-            end_line = #lines
-            start_line = math.max(1, end_line - preview_lines + 1)
+      local fsize = fn.getfsize(file)
+      if fsize > 0 and fsize < 1048576 then
+        local lines = fn.readfile(file, "", 5000)
+        if #lines > 0 then
+          local preview_lines = math.min(#lines, max_preview)
+          local scroll = state.preview_scroll or 0
+          local start_line, end_line
+          if line_num and line_num > 0 then
+            local half_preview = math.floor(preview_lines / 2)
+            start_line = math.max(1, line_num - half_preview + scroll)
+            end_line = start_line + preview_lines - 1
+            if end_line > #lines then
+              end_line = #lines
+              start_line = math.max(1, end_line - preview_lines + 1)
+            end
+          else
+            start_line = math.max(1, 1 + scroll)
+            end_line = math.min(#lines, start_line + preview_lines - 1)
           end
-        else
-          start_line = math.max(1, 1 + scroll)
-          end_line = math.min(#lines, start_line + preview_lines - 1)
+          state.preview_scroll = start_line - (line_num and line_num > 0 and math.max(1, line_num - math.floor(preview_lines / 2)) or 1)
+          preview_info = { file = file, lines = lines, start_line = start_line, end_line = end_line, match_line = line_num, total_lines = #lines }
         end
-        state.preview_scroll = start_line - (line_num and line_num > 0 and math.max(1, line_num - math.floor(preview_lines / 2)) or 1)
-        preview_info = { file = file, lines = lines, start_line = start_line, end_line = end_line, match_line = line_num, total_lines = #lines }
       end
     end
   end
@@ -147,7 +150,7 @@ function M.render_list()
   for i = 1, wh - 1 do state.space:set_line(i, {}) end
 
   if state.filter_error then
-    state.space:set_line(wh - layout.bar_lines - layout.sep_size, { { state.filter_error, "FinderColor" } })
+    state.space:set_line(wh - layout.bar_lines - layout.sep_size, { { state.filter_error, "FinderError" } })
     M.update_bar(state.mode == Mode.PROMPT and (state.prompts[state.idx] or "") or "")
     return
   end

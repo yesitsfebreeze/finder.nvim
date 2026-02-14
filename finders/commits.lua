@@ -1,8 +1,7 @@
 local fn = vim.fn
-local api = vim.api
-local DataType = require("finder.state").DataType
-local utils = require("finder.utils")
-local display = require("finder.display")
+local DataType = require("finder.src.state").DataType
+local utils = require("finder.src.utils")
+local display = require("finder.src.display")
 
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.Dir, DataType.DirList, DataType.Commits }
@@ -10,49 +9,40 @@ M.produces = DataType.Commits
 M.display = display.commit
 M.initial = true
 
+local run_async = utils.async_filter(function(_, items)
+  local format = "%h%x09%as%x09%an%x09%s"
+
+  local cmd = string.format("git log --pretty=format:'%s'", format)
+
+  if items and #items > 0 then
+    local files = utils.extract_files(items)
+    if #files > 0 then
+      local args = table.concat(vim.tbl_map(fn.shellescape, files), " ")
+      cmd = cmd .. " -- " .. args
+    end
+  end
+
+  return cmd
+end)
+
 function M.filter(query, items)
   if fn.executable("git") ~= 1 then
     return nil, "git not found"
   end
 
-  local format = "%h%x09%as%x09%an%x09%s"
-  local cmd
+  local result, err = run_async("", items)
+  if err == "async" then return result, err end
+  if err then return nil, err end
 
-  if items and #items > 0 then
-    -- Normalize any input type to file paths
-    local files = utils.extract_files(items)
-    if #files > 0 then
-      local args = table.concat(vim.tbl_map(fn.shellescape, files), " ")
-      cmd = string.format("git log --pretty=format:'%s' -- %s 2>/dev/null", format, args)
-    else
-      cmd = string.format("git log --pretty=format:'%s' 2>/dev/null", format)
-    end
-  else
-    cmd = string.format("git log --pretty=format:'%s' 2>/dev/null", format)
+  if query and query ~= "" then
+    return utils.filter_items(result, query)
   end
-
-  local results = fn.systemlist(cmd)
-  if vim.v.shell_error ~= 0 then
-    return nil, "git log failed"
-  end
-
-  if not query or query == "" then return results end
-
-  return utils.filter_items(results, query)
+  return result
 end
 
 function M.on_open(item)
   local hash = item:match('^([^\t]+)')
-  if not hash then return end
-  local diff = fn.systemlist('git show ' .. hash)
-  if vim.v.shell_error ~= 0 then return end
-  vim.cmd('enew')
-  local buf = api.nvim_get_current_buf()
-  api.nvim_buf_set_lines(buf, 0, -1, false, diff)
-  vim.bo[buf].filetype = 'git'
-  vim.bo[buf].bufhidden = 'wipe'
-  vim.bo[buf].buftype = 'nofile'
-  vim.bo[buf].modifiable = false
+  utils.show_commit(hash)
 end
 
 return M

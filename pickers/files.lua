@@ -1,5 +1,6 @@
 local fn = vim.fn
-local DataType = require("finder").DataType
+local DataType = require("finder.state").DataType
+local utils = require("finder.utils")
 
 local M = {}
 M.accepts = { DataType.None, DataType.FileList }
@@ -31,14 +32,7 @@ function M.filter(query, items)
     if #result > 0 then return result end
   end
 
-  local pattern = ".*" .. query:gsub(".", function(c)
-    return c:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0") .. ".*"
-  end)
-  local matches = {}
-  for _, file in ipairs(items) do
-    if file:lower():match(pattern:lower()) then table.insert(matches, file) end
-  end
-  return matches
+  return utils.fuzzy_filter(items, query)
 end
 
 return M

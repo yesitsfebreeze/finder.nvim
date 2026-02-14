@@ -1,5 +1,5 @@
 local fn = vim.fn
-local DataType = require("finder").DataType
+local DataType = require("finder.state").DataType
 
 local M = {}
 M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.File }
@@ -24,30 +24,21 @@ function M.filter(query, items)
 
   local files = nil
   if items and #items > 0 then
-    local single_file = nil
-    if #items == 1 then
-      single_file = items[1]:match("^([^:]+)") or items[1]
+    local set = {}
+    for _, item in ipairs(items) do
+      set[item:match("^([^:]+)") or item] = true
     end
-    
-    if single_file then
-      files = fn.shellescape(single_file)
-    else
-      local set = {}
-      for _, item in ipairs(items) do 
-        set[item:match("^([^:]+)") or item] = true 
-      end
-      files = table.concat(vim.tbl_map(fn.shellescape, vim.tbl_keys(set)), " ")
-    end
+    files = table.concat(vim.tbl_map(fn.shellescape, vim.tbl_keys(set)), " ")
   end
 
   local cmd
   if fn.executable("rg") == 1 then
     cmd = files
-      and string.format("rg --line-number --no-heading --color=never %s %s", fn.shellescape(query), files)
+      and string.format("rg --with-filename --line-number --no-heading --color=never %s %s", fn.shellescape(query), files)
       or string.format("rg --line-number --no-heading --color=never --hidden --glob '!.git' %s", fn.shellescape(query))
   elseif fn.executable("grep") == 1 then
     cmd = files
-      and string.format("grep -n --color=never %s %s", fn.shellescape(query), files)
+      and string.format("grep -Hn --color=never %s %s", fn.shellescape(query), files)
       or string.format("grep -rn --color=never --exclude-dir=.git %s .", fn.shellescape(query))
   else
     return nil, "no grep tool"

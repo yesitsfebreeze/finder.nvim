@@ -143,4 +143,108 @@ function M.highlight_matches(text, query, base_hl)
   return result
 end
 
+--- Detect whether items look like commits (tab-separated git log output).
+function M.is_commits(items)
+  return items and #items > 0 and items[1]:match('^[0-9a-f]+\t') ~= nil
+end
+
+--- Detect whether items look like grep results (file:line:content).
+function M.is_grep(items)
+  return items and #items > 0 and items[1]:match('^[^:]+:%d+:') ~= nil
+end
+
+--- Extract unique file paths from any item format.
+--- Handles: commits → git show --name-only, grep → file from file:line:content,
+--- plain file list, directories (returned as-is).
+---@param items string[]
+---@return string[]
+function M.extract_files(items)
+  if not items or #items == 0 then return {} end
+
+  if M.is_commits(items) then
+    local hashes = {}
+    for _, item in ipairs(items) do
+      local h = item:match('^([^\t]+)')
+      if h then table.insert(hashes, h) end
+    end
+    local args = table.concat(vim.tbl_map(fn.shellescape, hashes), ' ')
+    local result = fn.systemlist('git show --name-only --pretty=format: ' .. args .. ' 2>/dev/null')
+    local seen, out = {}, {}
+    for _, f in ipairs(result) do
+      if f ~= '' and not seen[f] then
+        seen[f] = true
+        table.insert(out, f)
+      end
+    end
+    return out
+  end
+
+  if M.is_grep(items) then
+    local seen, out = {}, {}
+    for _, item in ipairs(items) do
+      local f = item:match('^([^:]+)')
+      if f and not seen[f] then
+        seen[f] = true
+        table.insert(out, f)
+      end
+    end
+    return out
+  end
+
+  return items
+end
+
+--- Extract unique directory paths from any item format.
+---@param items string[]
+---@return string[]
+function M.extract_dirs(items)
+  if not items or #items == 0 then return {} end
+  local files = M.extract_files(items)
+  local seen, out = {}, {}
+  for _, f in ipairs(files) do
+    local dir = fn.isdirectory(f) == 1 and f or fn.fnamemodify(f, ':h')
+    if dir ~= '' and dir ~= '.' and not seen[dir] then
+      seen[dir] = true
+      table.insert(out, dir)
+    end
+  end
+  return out
+end
+
+--- Parse commit diffs into file:line:content grep-style entries.
+---@param items string[]  commit items (tab-separated)
+---@return string[]
+function M.commits_to_grep(items)
+  local hashes = {}
+  for _, item in ipairs(items) do
+    local h = item:match('^([^\t]+)')
+    if h then table.insert(hashes, h) end
+  end
+  local diff_lines = {}
+  for _, hash in ipairs(hashes) do
+    local diff = fn.systemlist('git show --pretty=format: ' .. fn.shellescape(hash) .. ' 2>/dev/null')
+    local file, lnum = nil, 0
+    for _, line in ipairs(diff) do
+      local nf = line:match('^%+%+%+ b/(.+)$')
+      if nf then file = nf; lnum = 0 end
+      local hs = line:match('^@@ %-[%d,]+ %+(%d+)')
+      if hs then lnum = tonumber(hs) - 1 end
+      if file and lnum >= 0 then
+        local ch = line:sub(1, 1)
+        if ch == '+' and not line:match('^%+%+%+') then
+          lnum = lnum + 1
+          table.insert(diff_lines, string.format('%s:%d:%s', file, lnum, line:sub(2)))
+        elseif ch == ' ' then
+          lnum = lnum + 1
+          table.insert(diff_lines, string.format('%s:%d:%s', file, lnum, line:sub(2)))
+        elseif ch ~= '-' and not line:match('^diff ') and not line:match('^index ')
+          and not line:match('^@@') and not line:match('^%-%-%- ') then
+          lnum = lnum + 1
+        end
+      end
+    end
+  end
+  return diff_lines
+end
+
 return M

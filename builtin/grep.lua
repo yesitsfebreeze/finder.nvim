@@ -1,9 +1,10 @@
 local fn = vim.fn
 local state = require("finder.state")
 local DataType = state.DataType
+local utils = require("finder.utils")
 
 local M = {}
-M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.File, DataType.Dir, DataType.DirList }
+M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.File, DataType.Dir, DataType.DirList, DataType.Commits }
 M.produces = DataType.GrepList
 M.actions = {
   ["<C-v>"] = function(item) local u = require("finder.utils"); local s = require("finder.state"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "vsplit", s.prompts[s.idx]) end,
@@ -32,9 +33,16 @@ function M.filter(query, items)
 
   local toggles = state.toggles or {}
 
-  if items and #items > 0 and items[1]:match("^[^:]+:%d+:") then
+  -- Grep through commit diffs
+  if items and #items > 0 and utils.is_commits(items) then
     stop_loading()
-    local utils = require("finder.utils")
+    local diff_lines = utils.commits_to_grep(items)
+    return utils.filter_items(diff_lines, query)
+  end
+
+  -- Re-filter existing grep results
+  if items and #items > 0 and utils.is_grep(items) then
+    stop_loading()
     local filtered = {}
     for _, item in ipairs(items) do
       local content = item:match("^[^:]+:%d+:(.*)$")

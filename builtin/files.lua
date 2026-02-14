@@ -4,7 +4,7 @@ local DataType = state.DataType
 local utils = require("finder.utils")
 
 local M = {}
-M.accepts = { DataType.None, DataType.FileList, DataType.Dir, DataType.DirList }
+M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.Dir, DataType.DirList, DataType.Commits }
 M.produces = DataType.FileList
 M.actions = {
   ["<C-v>"] = function(item) utils.open_file_at_line(item, nil, "vsplit") end,
@@ -36,6 +36,12 @@ end
 
 function M.filter(query, items)
   if not query or query == "" then return {} end
+
+  -- Normalize non-dir/non-plain inputs to file paths
+  if items and #items > 0 and (utils.is_commits(items) or utils.is_grep(items)) then
+    items = utils.extract_files(items)
+    return sort_by_frecency(utils.filter_items(items, query))
+  end
 
   local toggles = state.toggles or {}
   local is_dir = items and #items > 0 and fn.isdirectory(items[1]) == 1

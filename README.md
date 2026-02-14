@@ -2,6 +2,10 @@
 
 A composable fuzzy finder for Neovim. Pickers chain together — pipe Files into Grep, Grep into Commits, etc. No dependencies beyond Neovim 0.10+.
 
+![Picker select](screenshots/1.png)
+![Filtering results](screenshots/2.png)
+![Chaining pickers](screenshots/3.png)
+
 ## Installation
 
 <details>

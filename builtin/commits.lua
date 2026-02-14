@@ -5,7 +5,7 @@ local utils = require("finder.utils")
 local display = require("finder.display")
 
 local M = {}
-M.accepts = { DataType.None, DataType.FileList }
+M.accepts = { DataType.None, DataType.FileList, DataType.GrepList, DataType.Dir, DataType.DirList, DataType.Commits }
 M.produces = DataType.Commits
 M.display = display.commit
 
@@ -18,8 +18,14 @@ function M.filter(query, items)
   local cmd
 
   if items and #items > 0 then
-    local files = table.concat(vim.tbl_map(fn.shellescape, items), " ")
-    cmd = string.format("git log --pretty=format:'%s' -- %s 2>/dev/null", format, files)
+    -- Normalize any input type to file paths
+    local files = utils.extract_files(items)
+    if #files > 0 then
+      local args = table.concat(vim.tbl_map(fn.shellescape, files), " ")
+      cmd = string.format("git log --pretty=format:'%s' -- %s 2>/dev/null", format, args)
+    else
+      cmd = string.format("git log --pretty=format:'%s' 2>/dev/null", format)
+    end
   else
     cmd = string.format("git log --pretty=format:'%s' 2>/dev/null", format)
   end

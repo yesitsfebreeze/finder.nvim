@@ -2,7 +2,7 @@ local fn = vim.fn
 local DataType = require("finder.state").DataType
 
 local M = {}
-M.accepts = { DataType.File, DataType.FileList }
+M.accepts = { DataType.File, DataType.FileList, DataType.GrepList }
 M.produces = DataType.GrepList
 M.hidden = true
 M.actions = {

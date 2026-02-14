@@ -39,6 +39,8 @@ local defaults = {
     File = "finder.builtin.file",
     Sessions = "finder.builtin.sessions",
     Dirs = "finder.builtin.dirs",
+    ["/down"] = "finder.builtin.search_down",
+    ["?up"] = "finder.builtin.search_up",
   },
   keys = {
     sel_down = { "<Down>", "<C-j>" },

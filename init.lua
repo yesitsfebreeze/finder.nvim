@@ -55,11 +55,22 @@ function M.close()
   if state.space then state.space.close() end
   o.cmdheight = state.cmdh or 1
   state.input, state.space = nil, nil
+  state.origin = nil
 end
 
 function M.enter()
   state.close = M.close
   load_frecency()
+
+  -- Capture origin buffer context before opening finder
+  local buf = api.nvim_get_current_buf()
+  local name = api.nvim_buf_get_name(buf)
+  local pos = api.nvim_win_get_cursor(0)
+  if name and name ~= "" and vim.fn.filereadable(name) == 1 then
+    state.origin = { file = name, line = pos[1], col = pos[2], buf = buf }
+  else
+    state.origin = nil
+  end
 
   if #state.filters > 0 then
     state.mode, state.idx = Mode.PROMPT, #state.filters

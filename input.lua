@@ -9,11 +9,10 @@ local INPUT_DELAY = 50
 local state = require("finder.state")
 local Mode = state.Mode
 local DataType = state.DataType
-local create_space = require("finder.space")
+local create_space = require("space")
 local evaluate_mod = require("finder.evaluate")
 local render = require("finder.render")
 local utils = require("finder.utils")
-local keymap = require("finder.keymap")
 
 local function create_input()
   local opts = state.opts or state.defaults
@@ -23,7 +22,7 @@ local function create_input()
 
   local function bind(k, fn_ref)
     local bindings = type(k) == "table" and k or { k }
-    for _, b in ipairs(bindings) do keymap.bind("i", b, fn_ref, { buffer = st.buf }) end
+    for _, b in ipairs(bindings) do state.space.bind("i", b, fn_ref, { buffer = st.buf }) end
   end
 
   local function get()
@@ -103,7 +102,7 @@ local function create_input()
   local active_action_keys = {}
   local function register_picker_actions()
     for _, key in ipairs(active_action_keys) do
-      keymap.unbind("i", key, { buffer = st.buf })
+      state.space.unbind("i", key, { buffer = st.buf })
     end
     active_action_keys = {}
 
@@ -117,7 +116,7 @@ local function create_input()
 
     for key, action_fn in pairs(picker.actions) do
       table.insert(active_action_keys, key)
-      keymap.bind("i", key, function()
+      state.space.bind("i", key, function()
         local target_idx = state.sel or (#state.items > 0 and 1 or nil)
         if not target_idx or not state.items[target_idx] then return end
         state.close()
@@ -355,25 +354,25 @@ local function create_input()
     end
   end
 
-  keymap.bind("i", "<CR>", open_item, { buffer = st.buf })
-  keymap.bind("i", "<Tab>", push_forward, { buffer = st.buf })
-  keymap.bind("i", "<S-Tab>", step_back, { buffer = st.buf })
+  state.space.bind("i", "<CR>", open_item, { buffer = st.buf })
+  state.space.bind("i", "<Tab>", push_forward, { buffer = st.buf })
+  state.space.bind("i", "<S-Tab>", step_back, { buffer = st.buf })
 
-  keymap.bind("i", "<Esc>", function()
+  state.space.bind("i", "<Esc>", function()
     if state.sel or next(state.multi_sel) then
       state.sel = nil; state.multi_sel = {}; render.render_list()
     else state.close() end
   end, { buffer = st.buf })
 
   for key, del in pairs({ ["<BS>"] = true, ["<Left>"] = false }) do
-    keymap.bind("i", key, function()
+    state.space.bind("i", key, function()
       if not nav_back(del) then
         api.nvim_feedkeys(api.nvim_replace_termcodes(key, true, false, true), "n", false)
       end
     end, { buffer = st.buf })
   end
 
-  keymap.bind("i", "<Right>", function()
+  state.space.bind("i", "<Right>", function()
     local line = get()
     if fn.col(".") <= #line then
       api.nvim_feedkeys(api.nvim_replace_termcodes("<Right>", true, false, true), "n", false)
@@ -531,13 +530,12 @@ local function create_input()
   })
 
   cmd("startinsert!")
-  vim.schedule(keymap.rebind_all)
+  vim.schedule(function() state.space.rebind_all() end)
 
   return {
     close = function()
       cancel_debounce()
       cancel_picker_select()
-      keymap.unbind_all()
       api.nvim_del_augroup_by_name("FinderResize")
       if st.win and api.nvim_win_is_valid(st.win) then api.nvim_win_close(st.win, true) end
       st.win, st.buf = nil, nil

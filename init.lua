@@ -3,7 +3,7 @@ local o = vim.o
 
 local state = require("finder.state")
 local Mode = state.Mode
-local create_space = require("finder.space")
+local create_space = require("space")
 local evaluate_mod = require("finder.evaluate")
 local render = require("finder.render")
 local create_input = require("finder.input")

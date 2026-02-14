@@ -8,14 +8,32 @@ local DataType = {
   File = 4,
 }
 
+local _next_id = 5
+
+local function register_type(name, id)
+  assert(type(name) == "string", "register_type: name must be a string")
+  assert(type(id) == "number", "register_type: id must be a number")
+  if DataType[name] then
+    assert(DataType[name] == id, string.format("register_type: '%s' already registered with id %d", name, DataType[name]))
+    return id
+  end
+  for k, v in pairs(DataType) do
+    if v == id then
+      error(string.format("register_type: id %d already used by '%s'", id, k))
+    end
+  end
+  DataType[name] = id
+  return id
+end
+
 local defaults = {
   sep = " > ",
   list_height = 10,
   pickers = {
-    Files = "finder.pickers.files",
-    Grep = "finder.pickers.grep",
-    Commits = "finder.pickers.commits",
-    File = "finder.pickers.file",
+    Files = "finder.builtin.files",
+    Grep = "finder.builtin.grep",
+    Commits = "finder.builtin.commits",
+    File = "finder.builtin.file",
   },
 }
 
@@ -32,5 +50,6 @@ local M = {
 M.Mode = Mode
 M.DataType = DataType
 M.defaults = defaults
+M.register_type = register_type
 
 return M

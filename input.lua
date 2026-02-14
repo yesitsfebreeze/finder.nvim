@@ -88,15 +88,10 @@ local function create_input()
       table.remove(state.prompts, state.idx)
       table.remove(state.filter_inputs, state.idx)
       state.idx = state.idx - 1
-      if state.idx == 0 then
-        state.current_type = DataType.None
-        state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
-        clear(); render.update_bar("")
-      else
-        local txt = state.prompts[state.idx] or ""
-        set(txt, true); render.update_bar(txt)
-      end
-      evaluate_mod.evaluate(); render.render_list(); update_virt()
+      evaluate_mod.evaluate()
+      state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
+      clear(); render.update_bar("")
+      render.render_list(); update_virt()
       return true
     end
 
@@ -137,19 +132,11 @@ local function create_input()
   })
   wo[st.win].winhighlight = "Normal:Normal,NormalFloat:Normal"
 
-  keymap.set("i", "<Tab>", function()
-    if state.mode == Mode.PROMPT then
-      state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
-      render.update_bar(""); update_virt(); clear()
-    else
+  local function confirm()
+    if state.mode == Mode.PICKER then
       api.nvim_feedkeys(opts.sep, "n", false)
+      return
     end
-  end, { buffer = st.buf })
-
-  keymap.set("i", "<Esc>", function()
-    if state.sel then state.sel = nil; render.render_list() else state.close() end
-  end, { buffer = st.buf })
-  keymap.set("i", "<CR>", function()
     local target_idx = state.sel or (#state.items == 1 and 1 or nil)
     if target_idx and state.items[target_idx] then
       local item = state.items[target_idx]
@@ -167,15 +154,10 @@ local function create_input()
           state.close()
           utils.open_file_at_line(file, line_num)
         else
-          local file_spec = file
-          
           state.idx = state.idx + 1
-          
-          state.filter_inputs[state.idx] = { items = { file_spec }, type = DataType.FileList }
-          
-          local display_name = fn.fnamemodify(file, ":t")
+          state.filter_inputs[state.idx] = { items = { file }, type = DataType.FileList }
           table.insert(state.filters, "Grep")
-          table.insert(state.prompts, display_name)
+          table.insert(state.prompts, fn.fnamemodify(file, ":t"))
           
           evaluate_mod.evaluate()
           
@@ -204,7 +186,14 @@ local function create_input()
       end
       state.close()
     end
+  end
+
+  keymap.set("i", "<Tab>", confirm, { buffer = st.buf })
+
+  keymap.set("i", "<Esc>", function()
+    if state.sel then state.sel = nil; render.render_list() else state.close() end
   end, { buffer = st.buf })
+  keymap.set("i", "<CR>", confirm, { buffer = st.buf })
 
   for key, del in pairs({ ["<BS>"] = true, ["<Left>"] = false }) do
     keymap.set("i", key, function()

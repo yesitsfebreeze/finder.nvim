@@ -27,8 +27,3 @@ function M.filter(_, items)
 end
 
 return M
-  end
-  return cleaned
-end
-
-return M

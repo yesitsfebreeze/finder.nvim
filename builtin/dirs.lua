@@ -11,7 +11,6 @@ local dir_cache, cache_cwd = nil, nil
 function M.filter(query, items)
   if not query or query == "" then return {} end
 
-  -- Extract directories from non-dir input types
   if items and #items > 0 and (utils.is_commits(items) or utils.is_grep(items)
     or (fn.isdirectory(items[1]) ~= 1 and fn.filereadable(items[1]) == 1)) then
     items = utils.extract_dirs(items)

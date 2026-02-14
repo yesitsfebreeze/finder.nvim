@@ -12,22 +12,13 @@ M.min_query = 3
 
 local pending = { job = nil, cmd = nil, cache = {} }
 
-local function stop_loading()
-  state.loading = false
-  if state.loading_timer then
-    state.loading_timer:stop()
-    state.loading_timer:close()
-    state.loading_timer = nil
-  end
-end
-
 function M.filter(query, items)
   if fn.executable("git") ~= 1 then
     return nil, "git not found"
   end
 
   if not query or #query < M.min_query then
-    stop_loading()
+    state.stop_loading()
     return {}
   end
 
@@ -46,7 +37,7 @@ function M.filter(query, items)
   if pending.cache[cmd] then
     local result = pending.cache[cmd]
     pending.cache = {}
-    stop_loading()
+    state.stop_loading()
     return result
   end
 
@@ -57,19 +48,7 @@ function M.filter(query, items)
 
   pending.cmd = cmd
   pending.cache = {}
-  state.loading = true
-  state.loading_frame = 0
-  if not state.loading_timer then
-    state.loading_timer = vim.uv.new_timer()
-    state.loading_timer:start(0, 150, vim.schedule_wrap(function()
-      if not state.loading or not state.space then
-        stop_loading()
-        return
-      end
-      state.loading_frame = (state.loading_frame + 1) % 3
-      require("finder.render").render_list()
-    end))
-  end
+  state.start_loading()
 
   pending.job = vim.system(
     { "sh", "-c", cmd .. " 2>/dev/null" },
@@ -77,7 +56,7 @@ function M.filter(query, items)
     function(result)
       vim.schedule(function()
         if pending.cmd ~= cmd then return end
-        if not state.space then stop_loading(); return end
+        if not state.space then state.stop_loading(); return end
 
         local cleaned = {}
         if result.code <= 1 and result.stdout then

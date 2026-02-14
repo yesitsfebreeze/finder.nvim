@@ -28,6 +28,7 @@ end
 
 local defaults = {
   sep = " > ",
+  instant_clear = false,
   list_height = 16,
   file_width_ratio = 0.4,
   section_sep = {'─'},
@@ -74,6 +75,31 @@ local M = {
   loading_timer = nil,
   loading_frame = 0,
 }
+
+function M.stop_loading()
+  M.loading = false
+  if M.loading_timer then
+    M.loading_timer:stop()
+    M.loading_timer:close()
+    M.loading_timer = nil
+  end
+end
+
+function M.start_loading()
+  M.loading = true
+  M.loading_frame = 0
+  if not M.loading_timer then
+    M.loading_timer = vim.uv.new_timer()
+    M.loading_timer:start(0, 150, vim.schedule_wrap(function()
+      if not M.loading or not M.space then
+        M.stop_loading()
+        return
+      end
+      M.loading_frame = (M.loading_frame + 1) % 3
+      require("finder.render").render_list()
+    end))
+  end
+end
 
 M.Mode = Mode
 M.DataType = DataType

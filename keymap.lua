@@ -2,21 +2,8 @@ local api = vim.api
 
 local M = {}
 
---- @class finder.SavedBinding
---- @field mode string
---- @field lhs string
---- @field bufnr number|nil
---- @field prior table|nil  -- snapshot of the mapping that existed before we overwrote it
-
---- All bindings set during the current finder session.
---- @type finder.SavedBinding[]
 local bindings = {}
 
---- Snapshot an existing buffer-local or global mapping so we can restore it later.
----@param mode string
----@param lhs string
----@param bufnr? number
----@return table|nil
 local function snapshot(mode, lhs, bufnr)
   local maps = bufnr and api.nvim_buf_get_keymap(bufnr, mode)
     or api.nvim_get_keymap(mode)
@@ -29,14 +16,6 @@ local function snapshot(mode, lhs, bufnr)
   return nil
 end
 
---- Mirror of vim.keymap.set that tracks every binding it creates.
---- Saves any pre-existing mapping for the same mode/lhs/buffer so it can be
---- restored later via unbind_all().
----
----@param mode string|string[]
----@param lhs string
----@param rhs string|function
----@param opts? table
 function M.bind(mode, lhs, rhs, opts)
   opts = opts or {}
   local modes = type(mode) == "table" and mode or { mode }
@@ -56,10 +35,6 @@ function M.bind(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, opts)
 end
 
---- Re-snapshot and re-apply all tracked bindings.
---- Call this (via vim.schedule) after startinsert! so that mappings set by
---- plugins during InsertEnter (e.g. nvim-cmp's <Tab>) are captured as priors
---- and then overwritten by ours.
 function M.rebind_all()
   for _, b in ipairs(bindings) do
     b.prior = snapshot(b.mode, b.lhs, b.bufnr)
@@ -67,11 +42,6 @@ function M.rebind_all()
   end
 end
 
---- Delete a single tracked binding (used for dynamic picker action keys).
---- Only removes the first match.
----@param mode string
----@param lhs string
----@param opts? table  -- { buffer = bufnr }
 function M.unbind(mode, lhs, opts)
   opts = opts or {}
   local bufnr = opts.buffer
@@ -105,7 +75,6 @@ function M.unbind(mode, lhs, opts)
   end
 end
 
---- Remove every tracked binding and restore all prior mappings.
 function M.unbind_all()
   for i = #bindings, 1, -1 do
     local b = bindings[i]

@@ -22,27 +22,7 @@ function M.open_file_at_line(file, line_num, open_cmd, query)
     end
     if query and query ~= "" and line_num then
       local line = vim.api.nvim_get_current_line()
-      local toggles = require("finder.state").toggles or {}
-      local s, e
-      if toggles.regex then
-        local flags = toggles.case and "\\C" or "\\c"
-        local wp = toggles.word and "\\<" or ""
-        local ws = toggles.word and "\\>" or ""
-        local ok, re = pcall(vim.regex, flags .. wp .. query .. ws)
-        if ok then s, e = re:match_str(line) end
-      else
-        local plain = not toggles.word
-        local q_pat
-        if toggles.word then
-          local escaped = query:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
-          q_pat = "%f[%w_]" .. (toggles.case and escaped or escaped:lower()) .. "%f[^%w_]"
-        else
-          q_pat = toggles.case and query or query:lower()
-        end
-        local search_line = toggles.case and line or line:lower()
-        s, e = search_line:find(q_pat, 1, plain)
-        if s then s, e = s - 1, e end
-      end
+      local s, e = M.find_match(line, query)
       if s and e and e > s then
         vim.api.nvim_win_set_cursor(0, { line_num, s })
         cmd("normal! v")
@@ -57,29 +37,40 @@ function M.open_file_at_line(file, line_num, open_cmd, query)
   end
 end
 
-function M.matches(text, query)
+function M.find_match(text, query, byte_offset)
+  if not query or query == "" then return nil end
   local toggles = require("finder.state").toggles or {}
+  byte_offset = byte_offset or 0
 
   if toggles.regex then
     local flags = toggles.case and "\\C" or "\\c"
     local wp = toggles.word and "\\<" or ""
     local ws = toggles.word and "\\>" or ""
     local ok, re = pcall(vim.regex, flags .. wp .. query .. ws)
-    if not ok then return false end
-    return re:match_str(text) ~= nil
+    if not ok then return nil end
+    local sub = byte_offset > 0 and text:sub(byte_offset + 1) or text
+    local s, e = re:match_str(sub)
+    if not s or e <= s then return nil end
+    return byte_offset + s, byte_offset + e
   end
 
+  local q_pat, plain
   if toggles.word then
     local escaped = query:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
-    local pattern = "%f[%w_]" .. escaped .. "%f[^%w_]"
-    local t = toggles.case and text or text:lower()
-    local q = toggles.case and pattern or pattern:lower()
-    return t:find(q) ~= nil
+    q_pat = "%f[%w_]" .. (toggles.case and escaped or escaped:lower()) .. "%f[^%w_]"
+    plain = false
+  else
+    q_pat = toggles.case and query or query:lower()
+    plain = true
   end
+  local search_text = toggles.case and text or text:lower()
+  local s, e = search_text:find(q_pat, byte_offset + 1, plain)
+  if not s then return nil end
+  return s - 1, e
+end
 
-  local t = toggles.case and text or text:lower()
-  local q = toggles.case and query or query:lower()
-  return t:find(q, 1, true) ~= nil
+function M.matches(text, query)
+  return M.find_match(text, query) ~= nil
 end
 
 function M.filter_items(items, query)
@@ -93,71 +84,30 @@ end
 
 function M.highlight_matches(text, query, base_hl)
   if not query or query == "" then return { { text, base_hl } } end
-
-  local toggles = require("finder.state").toggles or {}
   local result = {}
-
-  if toggles.regex then
-    local flags = toggles.case and "\\C" or "\\c"
-    local wp = toggles.word and "\\<" or ""
-    local ws = toggles.word and "\\>" or ""
-    local ok, re = pcall(vim.regex, flags .. wp .. query .. ws)
-    if not ok then return { { text, base_hl } } end
-    local pos = 1
-    while pos <= #text do
-      local s, e = re:match_str(text:sub(pos))
-      if not s or e <= s then
-        table.insert(result, { text:sub(pos), base_hl })
-        break
-      end
-      if s > 0 then table.insert(result, { text:sub(pos, pos + s - 1), base_hl }) end
-      table.insert(result, { text:sub(pos + s, pos + e - 1), "FinderHighlight" })
-      pos = pos + e
+  local pos = 0
+  while pos < #text do
+    local s, e = M.find_match(text, query, pos)
+    if not s or e <= s then
+      table.insert(result, { text:sub(pos + 1), base_hl })
+      break
     end
-  else
-    local lower_text = toggles.case and text or text:lower()
-    local q, plain
-    if toggles.word then
-      local escaped = query:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
-      q = "%f[%w_]" .. (toggles.case and escaped or escaped:lower()) .. "%f[^%w_]"
-      plain = false
-    else
-      q = toggles.case and query or query:lower()
-      plain = true
-    end
-    local pos = 1
-    while pos <= #text do
-      local s, e = lower_text:find(q, pos, plain)
-      if s then
-        if s > pos then table.insert(result, { text:sub(pos, s - 1), base_hl }) end
-        table.insert(result, { text:sub(s, e), "FinderHighlight" })
-        pos = e + 1
-      else
-        table.insert(result, { text:sub(pos), base_hl })
-        break
-      end
-    end
+    if s > pos then table.insert(result, { text:sub(pos + 1, s), base_hl }) end
+    table.insert(result, { text:sub(s + 1, e), "FinderHighlight" })
+    pos = e
   end
-
   if #result == 0 then return { { text, base_hl } } end
   return result
 end
 
---- Detect whether items look like commits (tab-separated git log output).
 function M.is_commits(items)
   return items and #items > 0 and items[1]:match('^[0-9a-f]+\t') ~= nil
 end
 
---- Detect whether items look like grep results (file:line:content).
 function M.is_grep(items)
   return items and #items > 0 and items[1]:match('^[^:]+:%d+:') ~= nil
 end
 
---- Extract unique file paths from any item format.
---- Handles: commits → git show --name-only, grep → file from file:line:content,
---- plain file list, directories (returned as-is).
----@param items string[]
----@return string[]
 function M.extract_files(items)
   if not items or #items == 0 then return {} end
 
@@ -194,9 +144,6 @@ function M.extract_files(items)
   return items
 end
 
---- Extract unique directory paths from any item format.
----@param items string[]
----@return string[]
 function M.extract_dirs(items)
   if not items or #items == 0 then return {} end
   local files = M.extract_files(items)
@@ -211,9 +158,6 @@ function M.extract_dirs(items)
   return out
 end
 
---- Parse commit diffs into file:line:content grep-style entries.
----@param items string[]  commit items (tab-separated)
----@return string[]
 function M.commits_to_grep(items)
   local hashes = {}
   for _, item in ipairs(items) do

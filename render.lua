@@ -45,10 +45,12 @@ function M.update_bar(input)
   local n = #state.items
   local active = state.sel or (n > 0 and 1 or 0)
   local multi_count = vim.tbl_count(state.multi_sel)
-  local count_str = multi_count > 0
-    and string.format(" %d/%d [%d] ", active, n, multi_count)
-    or string.format(" %d/%d ", active, n)
-  table.insert(virt, { count_str, "FinderCount" })
+  if n > 0 or multi_count > 0 then
+    local count_str = multi_count > 0
+      and string.format(" %d/%d [%d] ", active, n, multi_count)
+      or string.format(" %d/%d ", active, n)
+    table.insert(virt, { count_str, "FinderCount" })
+  end
 
   if state.mode == Mode.INTERACT then
     table.insert(virt, { "INTERACT", "FinderHighlight" })
@@ -207,27 +209,7 @@ function M.render_list()
       api.nvim_buf_set_extmark(pbuf, ns, match_row, 0, { line_hl_group = "CursorLine" })
       local match_content = content[match_row + 1]
       if not match_content or not query or query == "" then return end
-      local toggles = state.toggles or {}
-      local s, e
-      if toggles.regex then
-        local flags = toggles.case and "\\C" or "\\c"
-        local wp = toggles.word and "\\<" or ""
-        local ws = toggles.word and "\\>" or ""
-        local ok, re = pcall(vim.regex, flags .. wp .. query .. ws)
-        if ok then s, e = re:match_str(match_content) end
-      else
-        local plain = not toggles.word
-        local q_pat
-        if toggles.word then
-          local escaped = query:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
-          q_pat = "%f[%w_]" .. (toggles.case and escaped or escaped:lower()) .. "%f[^%w_]"
-        else
-          q_pat = toggles.case and query or query:lower()
-        end
-        local search_line = toggles.case and match_content or match_content:lower()
-        s, e = search_line:find(q_pat, 1, plain)
-        if s then s, e = s - 1, e end
-      end
+      local s, e = utils.find_match(match_content, query)
       if s and e and e > s then
         api.nvim_buf_set_extmark(pbuf, ns, match_row, s, { end_col = e, hl_group = "FinderHighlight" })
       end

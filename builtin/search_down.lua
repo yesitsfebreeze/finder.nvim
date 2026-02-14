@@ -31,7 +31,7 @@ function M.filter(query, _)
     end
   end
 
-  -- Sort: lines >= cursor ascending, then lines < cursor ascending (forward wrap)
+  -- Forward wrap: lines >= cursor ascending, then lines < cursor ascending
   table.sort(matches, function(a, b)
     local a_fwd = a.lnum >= cursor
     local b_fwd = b.lnum >= cursor

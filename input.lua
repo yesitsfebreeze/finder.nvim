@@ -131,30 +131,26 @@ local function create_input()
     end
   end
 
+  local function pop_filter()
+    table.remove(state.filters, state.idx)
+    table.remove(state.prompts, state.idx)
+    table.remove(state.filter_inputs, state.idx)
+    state.idx = state.idx - 1
+    evaluate_mod.evaluate()
+    if state.idx > 0 then
+      local txt = state.prompts[state.idx] or ""
+      set(txt, true); render.render_list(); render.update_bar(txt); update_virt()
+    else
+      state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
+      clear(); render.update_bar(""); render.render_list(); update_virt()
+    end
+    register_picker_actions()
+  end
+
   local function nav_back(del)
     if fn.col(".") > 1 then
-      if del and state.mode == Mode.PROMPT and #get() == 1 then
-        -- deleting the last character: go back
-        if state.idx > 1 then
-          table.remove(state.filters, state.idx)
-          table.remove(state.prompts, state.idx)
-          table.remove(state.filter_inputs, state.idx)
-          state.idx = state.idx - 1
-          evaluate_mod.evaluate()
-          local txt = state.prompts[state.idx] or ""
-          set(txt, true); render.render_list(); render.update_bar(txt); update_virt()
-          register_picker_actions()
-        else
-          table.remove(state.filters, state.idx)
-          table.remove(state.prompts, state.idx)
-          table.remove(state.filter_inputs, state.idx)
-          state.idx = state.idx - 1
-          evaluate_mod.evaluate()
-          state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
-          clear(); render.update_bar("")
-          render.render_list(); update_virt()
-          register_picker_actions()
-        end
+      if del and state.mode == Mode.PROMPT and #get() == 1 and opts.instant_clear then
+        pop_filter()
         return true
       end
       return false
@@ -172,26 +168,7 @@ local function create_input()
 
     local cur = get()
     if del and cur == "" and state.idx > 0 then
-      if state.idx > 1 then
-        table.remove(state.filters, state.idx)
-        table.remove(state.prompts, state.idx)
-        table.remove(state.filter_inputs, state.idx)
-        state.idx = state.idx - 1
-        evaluate_mod.evaluate()
-        local txt = state.prompts[state.idx] or ""
-        set(txt, true); render.render_list(); render.update_bar(txt); update_virt()
-        register_picker_actions()
-      else
-        table.remove(state.filters, state.idx)
-        table.remove(state.prompts, state.idx)
-        table.remove(state.filter_inputs, state.idx)
-        state.idx = state.idx - 1
-        evaluate_mod.evaluate()
-        state.mode, state.picks = Mode.PICKER, evaluate_mod.get_pickers()
-        clear(); render.update_bar("")
-        render.render_list(); update_virt()
-        register_picker_actions()
-      end
+      pop_filter()
       return true
     end
 

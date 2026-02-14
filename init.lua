@@ -12,19 +12,7 @@ local M = {}
 
 local frecency_path = vim.fn.stdpath("data") .. "/finder_frecency.json"
 
-local function load_frecency()
-  if vim.fn.filereadable(frecency_path) == 1 then
-    local raw = table.concat(vim.fn.readfile(frecency_path), "\n")
-    local ok, data = pcall(vim.json.decode, raw)
-    if ok and type(data) == "table" then
-      state.frecency = data
-      return
-    end
-  end
-  state.frecency = {}
-end
-
-local function save_frecency()
+function M.close()
   local entries = {}
   for k, v in pairs(state.frecency) do
     table.insert(entries, { path = k, count = v.count, last_access = v.last_access })
@@ -37,20 +25,9 @@ local function save_frecency()
     pruned[entries[i].path] = { count = entries[i].count, last_access = entries[i].last_access }
   end
   local ok, encoded = pcall(vim.json.encode, pruned)
-  if ok then
-    vim.fn.writefile({ encoded }, frecency_path)
-  end
-end
-
-function M.close()
-  save_frecency()
+  if ok then vim.fn.writefile({ encoded }, frecency_path) end
   render.close_preview()
-  if state.loading_timer then
-    state.loading_timer:stop()
-    state.loading_timer:close()
-    state.loading_timer = nil
-  end
-  state.loading = false
+  state.stop_loading()
   if state.input then state.input.close() end
   if state.space then state.space.close() end
   o.cmdheight = state.cmdh or 1
@@ -60,9 +37,13 @@ end
 
 function M.enter()
   state.close = M.close
-  load_frecency()
+  if vim.fn.filereadable(frecency_path) == 1 then
+    local raw = table.concat(vim.fn.readfile(frecency_path), "\n")
+    local fok, data = pcall(vim.json.decode, raw)
+    if fok and type(data) == "table" then state.frecency = data
+    else state.frecency = {} end
+  else state.frecency = {} end
 
-  -- Capture origin buffer context before opening finder
   local buf = api.nvim_get_current_buf()
   local name = api.nvim_buf_get_name(buf)
   local pos = api.nvim_win_get_cursor(0)

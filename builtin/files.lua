@@ -37,7 +37,6 @@ end
 function M.filter(query, items)
   if not query or query == "" then return {} end
 
-  -- Normalize non-dir/non-plain inputs to file paths
   if items and #items > 0 and (utils.is_commits(items) or utils.is_grep(items)) then
     items = utils.extract_files(items)
     return sort_by_frecency(utils.filter_items(items, query))

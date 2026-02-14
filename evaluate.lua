@@ -12,7 +12,9 @@ function M.get_pickers()
   local valid = {}
   for _, name in ipairs(all_pickers) do
     local ok, picker = pcall(require, opts.pickers[name])
-    if ok and picker and not picker.hidden and vim.tbl_contains(picker.accepts or { DataType.None }, current_type) then
+    if not ok then
+      vim.notify("Finder: failed to load picker '" .. name .. "': " .. tostring(picker), vim.log.levels.WARN)
+    elseif picker and not picker.hidden and vim.tbl_contains(picker.accepts or { DataType.None }, current_type) then
       table.insert(valid, name)
     end
   end
@@ -49,13 +51,25 @@ function M.evaluate()
     end
 
     local ok, picker = pcall(require, picker_path)
-    if not ok or not picker or not picker.filter then
+    if not ok then
+      vim.notify("Finder: failed to load picker '" .. filter_name .. "': " .. tostring(picker), vim.log.levels.WARN)
+      state.filter_error, state.items = "Malformed Filter", {}; return
+    end
+    if not picker or not picker.filter then
       state.filter_error, state.items = "Malformed Filter", {}; return
     end
 
     if not vim.tbl_contains(picker.accepts or { DataType.None }, current_type) then
       state.filter_error = "Invalid input type for " .. filter_name
       state.items = {}
+      return
+    end
+
+    if #query < 2 then
+      state.items = {}
+      state.current_type = picker.produces or DataType.FileList
+      state.sel = nil
+      state.multi_sel = {}
       return
     end
 

@@ -37,7 +37,7 @@ function M.update_bar(input)
 
   for i, filter in ipairs(state.filters) do
     table.insert(virt, { utils.pad(filter, widths[i] or #filter), "FinderInactive" })
-    if i < #state.filters then
+    if i < #state.filters or state.mode == Mode.PICKER then
       table.insert(virt, { opts.sep, "FinderInactive" })
     end
   end

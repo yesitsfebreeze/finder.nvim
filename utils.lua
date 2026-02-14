@@ -70,7 +70,13 @@ function M.find_match(text, query, byte_offset)
 end
 
 function M.matches(text, query)
-  return M.find_match(text, query) ~= nil
+  if not query or query == "" then return false end
+  local tokens = vim.split(query, "%s+", { trimempty = true })
+  if #tokens == 0 then return false end
+  for _, tok in ipairs(tokens) do
+    if not M.find_match(text, tok) then return false end
+  end
+  return true
 end
 
 function M.filter_items(items, query)
@@ -84,18 +90,35 @@ end
 
 function M.highlight_matches(text, query, base_hl)
   if not query or query == "" then return { { text, base_hl } } end
+  local tokens = vim.split(query, "%s+", { trimempty = true })
+  if #tokens == 0 then return { { text, base_hl } } end
+  local marks = {}
+  for _, tok in ipairs(tokens) do
+    local pos = 0
+    while pos < #text do
+      local s, e = M.find_match(text, tok, pos)
+      if not s or e <= s then break end
+      table.insert(marks, { s, e })
+      pos = e
+    end
+  end
+  table.sort(marks, function(a, b) return a[1] < b[1] end)
+  local merged = {}
+  for _, m in ipairs(marks) do
+    if #merged > 0 and m[1] <= merged[#merged][2] then
+      merged[#merged][2] = math.max(merged[#merged][2], m[2])
+    else
+      table.insert(merged, { m[1], m[2] })
+    end
+  end
   local result = {}
   local pos = 0
-  while pos < #text do
-    local s, e = M.find_match(text, query, pos)
-    if not s or e <= s then
-      table.insert(result, { text:sub(pos + 1), base_hl })
-      break
-    end
-    if s > pos then table.insert(result, { text:sub(pos + 1, s), base_hl }) end
-    table.insert(result, { text:sub(s + 1, e), "FinderHighlight" })
-    pos = e
+  for _, m in ipairs(merged) do
+    if m[1] > pos then table.insert(result, { text:sub(pos + 1, m[1]), base_hl }) end
+    table.insert(result, { text:sub(m[1] + 1, m[2]), "FinderHighlight" })
+    pos = m[2]
   end
+  if pos < #text then table.insert(result, { text:sub(pos + 1), base_hl }) end
   if #result == 0 then return { { text, base_hl } } end
   return result
 end

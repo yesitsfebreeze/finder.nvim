@@ -54,6 +54,7 @@ function M.filter(query, items)
         local result
         if gitfiles then
           result = fn.systemlist(string.format("git -C %s ls-files --cached --others --exclude-standard", fn.shellescape(cwd)))
+          for i, f in ipairs(result) do result[i] = cwd .. "/" .. f end
         elseif fn.executable("fd") == 1 then
           result = fn.systemlist(string.format("fd --type f --hidden --follow --exclude .git . %s", fn.shellescape(cwd)))
         elseif fn.executable("rg") == 1 then

@@ -4,6 +4,8 @@ local cmd = vim.cmd
 local bo = vim.bo
 local wo = vim.wo
 
+local INPUT_DELAY = 50
+
 local state = require("finder.state")
 local Mode = state.Mode
 local DataType = state.DataType
@@ -76,20 +78,13 @@ local function create_input()
     end
 
     if state.mode == Mode.PROMPT and state.idx > 0 then
-      local cur_filter = state.filters[state.idx]
-      local picker_path = opts.pickers[cur_filter]
-      if picker_path then
-        local pok, picker = pcall(require, picker_path)
-        if pok and picker and picker.min_query then
-          local remaining = math.max(0, picker.min_query - #input)
-          if remaining > 0 then
-            local line = api.nvim_buf_get_lines(st.buf, 0, 1, false)[1] or ""
-            api.nvim_buf_set_extmark(st.buf, NS, 0, #line, {
-              virt_text = { { string.rep("?", remaining), "FinderInactive" } },
-              virt_text_pos = "inline", right_gravity = true,
-            })
-          end
-        end
+      local remaining = math.max(0, 2 - #input)
+      if remaining > 0 then
+        local line = api.nvim_buf_get_lines(st.buf, 0, 1, false)[1] or ""
+        api.nvim_buf_set_extmark(st.buf, NS, 0, #line, {
+          virt_text = { { string.rep("?", remaining), "FinderInactive" } },
+          virt_text_pos = "inline", right_gravity = true,
+        })
       end
     end
 
@@ -437,6 +432,24 @@ local function create_input()
     sel_down()
   end)
 
+  local picker_select_timer = nil
+  local function cancel_picker_select()
+    if picker_select_timer then
+      picker_select_timer:stop()
+      picker_select_timer:close()
+      picker_select_timer = nil
+    end
+  end
+
+  local debounce_timer = nil
+  local function cancel_debounce()
+    if debounce_timer then
+      debounce_timer:stop()
+      debounce_timer:close()
+      debounce_timer = nil
+    end
+  end
+
   api.nvim_create_autocmd("TextChangedI", {
     buffer = st.buf,
     callback = function()
@@ -453,21 +466,40 @@ local function create_input()
             return n:lower():sub(1, #input) == input:lower()
           end, all)
           render.update_bar(input)
-          if #state.picks == 1 then
-            state.idx = state.idx + 1
-            table.insert(state.filters, state.picks[1])
-            table.insert(state.prompts, "")
-            state.mode, state.picks = Mode.PROMPT, {}
-            evaluate_mod.evaluate()
-            clear()
-            render.render_list(); render.update_bar(""); update_virt()
-            register_picker_actions()
+          cancel_picker_select()
+          if #state.picks == 1 and input ~= "" then
+            picker_select_timer = vim.uv.new_timer()
+            picker_select_timer:start(state.debounce, 0, vim.schedule_wrap(function()
+              cancel_picker_select()
+              if not st.buf or not api.nvim_buf_is_valid(st.buf) then return end
+              if state.mode ~= Mode.PICKER then return end
+              local cur_input = get()
+              local cur_picks = vim.tbl_filter(function(n)
+                return n:lower():sub(1, #cur_input) == cur_input:lower()
+              end, evaluate_mod.get_pickers())
+              if #cur_picks == 1 then
+                state.idx = state.idx + 1
+                table.insert(state.filters, cur_picks[1])
+                table.insert(state.prompts, "")
+                state.mode, state.picks = Mode.PROMPT, {}
+                evaluate_mod.evaluate()
+                clear()
+                render.render_list(); render.update_bar(""); update_virt()
+                register_picker_actions()
+              end
+            end))
           end
         end
       else
-        state.prompts[state.idx] = input
-        evaluate_mod.evaluate()
-        render.render_list(); render.update_bar(input); update_virt()
+        cancel_debounce()
+        debounce_timer = vim.uv.new_timer()
+        debounce_timer:start(state.debounce, 0, vim.schedule_wrap(function()
+          cancel_debounce()
+          if not st.buf or not api.nvim_buf_is_valid(st.buf) then return end
+          state.prompts[state.idx] = get()
+          evaluate_mod.evaluate()
+          render.render_list(); render.update_bar(get()); update_virt()
+        end))
       end
     end
   })
@@ -503,6 +535,8 @@ local function create_input()
 
   return {
     close = function()
+      cancel_debounce()
+      cancel_picker_select()
       keymap.unbind_all()
       api.nvim_del_augroup_by_name("FinderResize")
       if st.win and api.nvim_win_is_valid(st.win) then api.nvim_win_close(st.win, true) end

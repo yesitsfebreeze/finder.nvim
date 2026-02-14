@@ -1,5 +1,7 @@
 local Mode = { PICKER = 1, PROMPT = 2, INTERACT = 3 }
 
+local DEBOUNCE_DELAY = 25
+
 local DataType = {
   None = 0,
   FileList = 1,
@@ -90,7 +92,7 @@ function M.start_loading()
   M.loading_frame = 0
   if not M.loading_timer then
     M.loading_timer = vim.uv.new_timer()
-    M.loading_timer:start(0, 150, vim.schedule_wrap(function()
+    M.loading_timer:start(0, DEBOUNCE_DELAY, vim.schedule_wrap(function()
       if not M.loading or not M.space then
         M.stop_loading()
         return
@@ -101,6 +103,7 @@ function M.start_loading()
   end
 end
 
+M.debounce = DEBOUNCE_DELAY
 M.Mode = Mode
 M.DataType = DataType
 M.defaults = defaults

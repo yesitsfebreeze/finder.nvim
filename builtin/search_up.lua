@@ -11,8 +11,6 @@ M.actions = {
   ["<C-x>"] = function(item) local f, l = utils.parse_item(item); utils.open_file_at_line(f, l, "split", state.prompts[state.idx]) end,
   ["<C-t>"] = function(item) local f, l = utils.parse_item(item); utils.open_file_at_line(f, l, "tabedit", state.prompts[state.idx]) end,
 }
-M.min_query = 1
-
 function M.filter(query, _)
   if not query or query == "" then return {} end
 

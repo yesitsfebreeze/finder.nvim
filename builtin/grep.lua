@@ -12,15 +12,9 @@ M.actions = {
   ["<C-t>"] = function(item) local u = require("finder.utils"); local s = require("finder.state"); local f, l = u.parse_item(item); u.open_file_at_line(f, l, "tabedit", s.prompts[s.idx]) end,
 }
 
-M.min_query = 3
-
 local pending = { job = nil, cmd = nil, cache = {} }
 
 function M.filter(query, items)
-  if not query or #query < M.min_query then
-    state.stop_loading()
-    return {}
-  end
 
   local toggles = state.toggles or {}
 

@@ -8,18 +8,11 @@ local M = {}
 M.accepts = { DataType.None, DataType.FileList }
 M.produces = DataType.Commits
 M.display = display.commit
-M.min_query = 3
-
 local pending = { job = nil, cmd = nil, cache = {} }
 
 function M.filter(query, items)
   if fn.executable("git") ~= 1 then
     return nil, "git not found"
-  end
-
-  if not query or #query < M.min_query then
-    state.stop_loading()
-    return {}
   end
 
   local toggles = state.toggles or {}

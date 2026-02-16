@@ -87,6 +87,22 @@ function M.enter()
   state.input = create_input()
 end
 
+function M.enter_fresh()
+  state.filters = {}
+  state.prompts = {}
+  state.filter_inputs = {}
+  state.idx = 0
+  state.mode = Mode.PICKER
+  M.enter()
+end
+
+function M.enter_with(keys)
+  M.enter()
+  vim.schedule(function()
+    api.nvim_feedkeys(api.nvim_replace_termcodes(keys, true, false, true), "t", false)
+  end)
+end
+
 function M.setup(opts)
   _G.Finder = M
   state.opts = vim.tbl_deep_extend("force", state.defaults, opts or {})
